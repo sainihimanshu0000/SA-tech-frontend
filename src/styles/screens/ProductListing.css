@@ -1,0 +1,5 @@
+@layer components {
+  .product-listing-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

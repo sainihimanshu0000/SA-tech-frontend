@@ -1,0 +1,5 @@
+@layer components {
+  .profile-screen {
+    @apply min-h-screen bg-agro-background;
+  }
+}

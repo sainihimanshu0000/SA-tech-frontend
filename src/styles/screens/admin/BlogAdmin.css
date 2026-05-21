@@ -1,0 +1,5 @@
+@layer components {
+  .blog-admin-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

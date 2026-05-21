@@ -1,0 +1,5 @@
+@layer components {
+  .ecopower-app-screen {
+    @apply min-h-screen bg-white;
+  }
+}

@@ -1,0 +1,5 @@
+@layer components {
+  .about-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

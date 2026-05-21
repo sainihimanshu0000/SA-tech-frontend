@@ -1,0 +1,5 @@
+@layer components {
+  .admin-dashboard-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

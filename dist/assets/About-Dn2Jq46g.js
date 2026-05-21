@@ -1,0 +1,1 @@
+import{j as t}from"./index-DrYCjRYP.js";function e(){return t.jsxs("div",{className:"container mx-auto px-4 py-12",children:[t.jsx("h1",{className:"text-4xl font-bold mb-6",children:"About AgroMart"}),t.jsx("p",{className:"text-lg text-gray-600",children:"Your trusted partner in modern farming..."})]})}export{e as default};

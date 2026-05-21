@@ -1,0 +1,13 @@
+@layer components {
+  .agro-container {
+    @apply container mx-auto px-4;
+  }
+
+  .agro-section {
+    @apply py-10 md:py-14 lg:py-16;
+  }
+
+  .agro-page {
+    @apply min-h-screen bg-gray-50;
+  }
+}

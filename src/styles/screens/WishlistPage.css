@@ -1,0 +1,5 @@
+@layer components {
+  .wishlist-page-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

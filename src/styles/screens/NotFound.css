@@ -1,0 +1,5 @@
+@layer components {
+  .not-found-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}
