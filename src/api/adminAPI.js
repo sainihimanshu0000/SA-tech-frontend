@@ -29,8 +29,9 @@ export const getSalesData = async (period = 'monthly') => {
 // Get all orders (admin view)
 export const getAllOrders = async (page = 1, limit = 10, filters = {}) => {
   try {
+    const params = typeof page === 'object' ? page : { page, limit, ...filters }
     const response = await API.get('/admin/orders', {
-      params: { page, limit, ...filters }
+      params
     })
     return response.data
   } catch (error) {
@@ -51,7 +52,8 @@ export const getOrderDetails = async (orderId) => {
 // Update order status
 export const updateOrderStatus = async (orderId, status) => {
   try {
-    const response = await API.patch(`/admin/orders/${orderId}/status`, { status })
+    const nextStatus = typeof status === 'object' ? status.status : status
+    const response = await API.put(`/orders/${orderId}/status`, { status: nextStatus })
     return response.data
   } catch (error) {
     throw error
@@ -61,9 +63,9 @@ export const updateOrderStatus = async (orderId, status) => {
 // Bulk update orders
 export const bulkUpdateOrders = async (orderIds, action) => {
   try {
+    const payload = Array.isArray(orderIds) ? { orderIds, action } : orderIds
     const response = await API.post('/admin/orders/bulk-update', {
-      orderIds,
-      action
+      ...payload
     })
     return response.data
   } catch (error) {
@@ -132,8 +134,9 @@ export const exportProducts = async (filters = {}) => {
 // Get all users
 export const getAllUsers = async (page = 1, limit = 10, filters = {}) => {
   try {
+    const params = typeof page === 'object' ? page : { page, limit, ...filters }
     const response = await API.get('/admin/users', {
-      params: { page, limit, ...filters }
+      params
     })
     return response.data
   } catch (error) {
@@ -151,10 +154,20 @@ export const getUserDetails = async (userId) => {
   }
 }
 
+// Create admin user
+export const createAdminUser = async (adminData) => {
+  try {
+    const response = await API.post('/admin/users/admin', adminData)
+    return response.data
+  } catch (error) {
+    throw error
+  }
+}
+
 // Update user role
 export const updateUserRole = async (userId, role) => {
   try {
-    const response = await API.patch(`/admin/users/${userId}/role`, { role })
+    const response = await API.put(`/admin/users/${userId}/role`, { role })
     return response.data
   } catch (error) {
     throw error
@@ -164,7 +177,7 @@ export const updateUserRole = async (userId, role) => {
 // Ban/Unban user
 export const toggleUserStatus = async (userId, isActive) => {
   try {
-    const response = await API.patch(`/admin/users/${userId}/status`, { isActive })
+    const response = await API.put(`/admin/users/${userId}/status`, { isActive })
     return response.data
   } catch (error) {
     throw error
@@ -413,8 +426,9 @@ export const updateServiceRequestStatus = async (serviceId, status) => {
 // Get all subsidy applications
 export const getAllSubsidyApplications = async (page = 1, limit = 10, filters = {}) => {
   try {
+    const params = typeof page === 'object' ? page : { page, limit, ...filters }
     const response = await API.get('/admin/subsidy-applications', {
-      params: { page, limit, ...filters }
+      params
     })
     return response.data
   } catch (error) {
@@ -536,9 +550,9 @@ export const updateSystemSettings = async (settings) => {
 // ============ SOLAR INQUIRIES ============
 
 // Get all solar inquiries
-export const getAllSolarInquiries = async () => {
+export const getAllSolarInquiries = async (params = {}) => {
   try {
-    const response = await API.get('/admin/solar-inquiries')
+    const response = await API.get('/admin/solar-inquiries', { params })
     return response.data
   } catch (error) {
     throw error
@@ -548,7 +562,8 @@ export const getAllSolarInquiries = async () => {
 // Update solar inquiry status
 export const updateSolarInquiryStatus = async (inquiryId, status) => {
   try {
-    const response = await API.put(`/admin/solar-inquiries/${inquiryId}`, { status })
+    const payload = typeof status === 'object' ? status : { status }
+    const response = await API.put(`/admin/solar-inquiries/${inquiryId}`, payload)
     return response.data
   } catch (error) {
     throw error
@@ -560,7 +575,8 @@ export const updateSolarInquiryStatus = async (inquiryId, status) => {
 // Update subsidy status
 export const updateSubsidyStatus = async (subsidyId, status) => {
   try {
-    const response = await API.put(`/admin/subsidies/${subsidyId}`, { status })
+    const payload = typeof status === 'object' ? status : { status }
+    const response = await API.patch(`/admin/subsidy-applications/${subsidyId}`, payload)
     return response.data
   } catch (error) {
     throw error
@@ -598,10 +614,11 @@ export const exportProductsToCSV = async (filters = {}) => {
 // ============ ANALYTICS ============
 
 // Get revenue analytics
-export const getRevenueAnalytics = async (period = 'monthly') => {
+export const getRevenueAnalytics = async (filters = {}) => {
   try {
+    const params = typeof filters === 'string' ? { period: filters } : filters
     const response = await API.get('/admin/analytics/revenue', {
-      params: { period }
+      params
     })
     return response.data
   } catch (error) {
@@ -615,8 +632,9 @@ export const getRevenueAnalytics = async (period = 'monthly') => {
 // Get all products (admin view with all fields)
 export const getAllProductsAdmin = async (page = 1, limit = 12, filters = {}) => {
   try {
+    const params = typeof page === 'object' ? page : { page, limit, ...filters }
     const response = await API.get('/products', {  // Changed from '/admin/products'
-      params: { page, limit, ...filters }
+      params
     })
     return response.data
   } catch (error) {
@@ -637,9 +655,7 @@ export const getProductDetailsAdmin = async (productId) => {
 // Create product
 export const createProductAdmin = async (productData) => {
   try {
-    const response = await API.post('/products', productData, { 
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    const response = await API.post('/products', productData)
     return response.data
   } catch (error) {
     throw error
@@ -669,8 +685,9 @@ export const deleteProductAdmin = async (productId) => {
 // Bulk delete products
 export const bulkDeleteProducts = async (productIds) => {
   try {
+    const payload = Array.isArray(productIds) ? { productIds } : productIds
     const response = await API.delete('/products/bulk', {  // Changed
-      data: { productIds }
+      data: payload
     })
     return response.data
   } catch (error) {

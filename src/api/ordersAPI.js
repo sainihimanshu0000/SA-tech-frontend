@@ -13,7 +13,7 @@ export const createOrder = async (orderData) => {
 // Get my orders
 export const getOrders = async (page = 1, limit = 10) => {
   try {
-    const response = await API.get('/orders', {
+    const response = await API.get('/orders/my-orders', {
       params: { page, limit }
     })
     return response.data

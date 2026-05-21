@@ -198,7 +198,7 @@ export default function WishlistPage() {
 
                   {/* View Details Link */}
                   <Link
-                    to={`/products/${product._id}`}
+                    to={`/product/${product._id}`}
                     className="block text-center mt-3 text-green-600 hover:text-green-700 font-medium text-sm"
                   >
                     View Details →

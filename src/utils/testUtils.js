@@ -256,3 +256,44 @@ export async function runTests() {
 
 // Export for use in components/pages
 export default testUtils;
+
+
+
+
+const axios = require("axios");
+const FormData = require("form-data");
+const fs = require("fs");
+
+async function testCreateProduct() {
+  const form = new FormData();
+
+  form.append("name", "Urea Fertilizer");
+  form.append("description", "High quality fertilizer");
+  form.append("longDescription", "Best for wheat crop");
+  form.append("category", "64f1abc1234567890");
+  form.append("price", 500);
+  form.append("mrp", 600);
+  form.append("stock", 100);
+
+  form.append("primary", fs.createReadStream("./test.jpg"));
+  form.append("thumbnails", fs.createReadStream("./thumb.jpg"));
+
+  try {
+    const response = await axios.post(
+      "http://localhost:5000/api/products",
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          Authorization: "Bearer YOUR_ADMIN_TOKEN"
+        }
+      }
+    );
+
+    console.log(response.data);
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+  }
+}
+
+testCreateProduct();

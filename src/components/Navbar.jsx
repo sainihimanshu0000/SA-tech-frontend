@@ -61,7 +61,8 @@ export default function Navbar() {
       if (searchQuery.length > 2) {
         try {
           const res = await API.get(`/products/search?q=${searchQuery}`)
-          setSearchResults(res.data.slice(0, 5))
+          const products = res.data.products || res.data.data || res.data
+          setSearchResults(Array.isArray(products) ? products.slice(0, 5) : [])
         } catch (err) {
           console.error('Search error:', err)
         }
@@ -152,7 +153,7 @@ export default function Navbar() {
                   {searchResults.map((product) => (
                     <Link
                       key={product.id}
-                      to={`/products/${product.id}`}
+                      to={`/product/${product._id || product.id || product.slug}`}
                       className="flex items-center gap-3 p-3 hover:bg-gray-50 transition"
                       onClick={() => setSearchQuery('')}
                     >
@@ -282,7 +283,7 @@ export default function Navbar() {
                   {searchResults.map((product) => (
                     <Link
                       key={product.id}
-                      to={`/products/${product.id}`}
+                      to={`/product/${product._id || product.id || product.slug}`}
                       className="flex items-center gap-3 p-3 hover:bg-gray-50 transition"
                       onClick={() => {
                         setSearchQuery('')

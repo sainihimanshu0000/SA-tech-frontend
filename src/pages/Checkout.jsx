@@ -16,7 +16,15 @@ export default function Checkout(){
   async function handlePlaceOrder(){
     setLoading(true)
     try {
-      const res = await API.post('/orders', { paymentMethod: payment.method, paymentToken: payment.token })
+      await API.post('/orders', {
+        paymentMethod: payment.method,
+        paymentToken: payment.token,
+        shippingAddress: {
+          address: shipping.address,
+          city: shipping.city,
+          pincode: shipping.zipcode,
+        },
+      })
       setOrderPlaced(true)
       setTimeout(() => navigate('/'), 2000)
     } catch (err) {

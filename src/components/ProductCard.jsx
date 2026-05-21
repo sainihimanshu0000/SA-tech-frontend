@@ -3,25 +3,34 @@ import { Card, Badge } from './UI'
 import { IoStar, IoCart } from 'react-icons/io5'
 
 export default function ProductCard({ product, onAddToCart }){
+  const imageUrl = product.image || product.images?.primary || product.images?.thumbnails?.[0]
+  const categoryName = typeof product.category === 'object' ? product.category?.name : product.category
+
   return (
     <Card hover>
       <div className="aspect-square bg-agro-background rounded-lg overflow-hidden mb-3 flex items-center justify-center">
-        {product.image ? (
-          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+        {imageUrl ? (
+          <img src={imageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <span className="text-4xl">🌱</span>
         )}
       </div>
       
       <div className="space-y-2">
-        <Badge color="secondary">{product.category}</Badge>
+        <Badge color="secondary">{categoryName || 'Product'}</Badge>
         <h3 className="font-bold text-agro-dark line-clamp-2">{product.name}</h3>
         
         <p className="text-sm text-gray-600">{product.description?.substring(0, 50)}...</p>
         
         <div className="flex items-center justify-between pt-2">
           <div>
-            <p className="text-2xl font-bold text-agro-primary">${product.price}</p>
+            <p className="text-2xl font-bold text-agro-primary">
+              {new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0,
+              }).format(product.price || 0)}
+            </p>
             {product.avgRating && (
               <div className="flex items-center gap-1 mt-1">
                 <IoStar className="text-agro-accent" size={14} />

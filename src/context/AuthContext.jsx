@@ -11,21 +11,36 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth state from localStorage on app startup
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    const restoreSession = async () => {
+      const storedToken = localStorage.getItem('token');
 
-    if (storedToken && storedUser) {
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+
       try {
+        const response = await API.get('/auth/profile');
+        const userData = response.data.user || response.data.data || response.data;
+
+        localStorage.setItem('user', JSON.stringify(userData));
         setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        setUser(userData);
         setIsAuthenticated(true);
       } catch (err) {
         console.error('Failed to restore auth state:', err);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+        setToken(null);
+        setUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    restoreSession();
   }, []);
 
   const login = async (email, password) => {
@@ -74,11 +89,30 @@ export const AuthProvider = ({ children }) => {
     // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('refreshToken');
 
     // Reset context state
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
+  };
+
+  const setAuthUser = (userData) => {
+    if (!userData) return;
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const response = await API.get('/auth/profile');
+      const userData = response.data.user || response.data.data || response.data;
+      setAuthUser(userData);
+      return { success: true, user: userData };
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to load profile';
+      return { success: false, error: message };
+    }
   };
 
   const value = {
@@ -89,6 +123,8 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    setAuthUser,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

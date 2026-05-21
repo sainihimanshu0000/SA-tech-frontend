@@ -1,0 +1,13 @@
+@layer components {
+  .agro-card {
+    @apply rounded-xl bg-white shadow-soft transition-shadow duration-200 hover:shadow-hover;
+  }
+
+  .agro-focus {
+    @apply focus:outline-none focus:ring-2 focus:ring-agro-primary focus:ring-offset-2;
+  }
+
+  .agro-gradient {
+    background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 100%);
+  }
+}

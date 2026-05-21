@@ -1,0 +1,5 @@
+@layer components {
+  .contact-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

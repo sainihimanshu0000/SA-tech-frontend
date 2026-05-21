@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/UI'
 import { useAuth } from '../hooks/useAuth'
 import { IoMail, IoLockClosed } from 'react-icons/io5'
@@ -10,7 +10,9 @@ export default function Login(){
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
+  const redirectTo = location.state?.from || '/'
 
   async function handleSubmit(e){
     e.preventDefault()
@@ -23,7 +25,7 @@ export default function Login(){
       if (result.success) {
         // Login successful - AuthContext state is updated
         console.log('Login successful:', result.user)
-        navigate('/')
+        navigate(redirectTo, { replace: true })
       } else {
         // Login failed - show error
         setError(result.error)

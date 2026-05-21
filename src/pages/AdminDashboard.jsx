@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button, Badge } from '../components/UI'
 import { 
   IoAdd, IoBarChart, IoCart, IoPeople, IoCube, 
@@ -11,7 +12,7 @@ import {
   IoWallet, IoBag, IoPerson, IoStorefront,
   IoNewspaper, IoSettings, IoLogOut, IoMenu,
   IoColorPalette, IoGlobe, IoLockClosed, IoNotifications,
-  IoMail, IoMoon
+  IoMail, IoMoon, IoShield
 } from 'react-icons/io5'
 import { toast } from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -20,6 +21,10 @@ import {
   getAllOrders,
   getAllProductsAdmin,
   getAllUsers,
+  createAdminUser,
+  updateUserRole,
+  toggleUserStatus,
+  deleteUserAdmin,
   updateOrderStatus,
   bulkUpdateOrders,
   createProductAdmin,
@@ -60,6 +65,7 @@ import {
 import BlogAdmin from './admin/BlogAdmin';
 import LoanAdmin from './admin/LoanAdmin'
 import { getAllCategories } from '../api/categoriesAPI' // Add this import
+import { useAuth } from '../hooks/useAuth'
 
 // Animation variants
 const fadeIn = {
@@ -761,12 +767,19 @@ const LogoutModal = ({ isOpen, onClose, onConfirm }) => {
 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+
   // State Management
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalRevenue: 0,
     totalProducts: 0,
     totalCustomers: 0,
+    totalUsers: 0,
+    totalAdmins: 0,
+    activeUsers: 0,
+    inactiveUsers: 0,
     pendingOrders: 0,
     solarInstallations: 0,
     subsidyApplications: 0,
@@ -935,6 +948,7 @@ export default function AdminDashboard() {
         setStats(prev => ({
           ...prev,
           ...statsData,
+          totalRevenue: statsData.totalRevenue ?? statsData.totalSales ?? prev.totalRevenue,
           lowStockCount: lowStockRes.status === 'fulfilled' ? lowStockRes.value?.data?.length || 0 : 0
         }))
       }
@@ -971,7 +985,7 @@ export default function AdminDashboard() {
       
       const res = await getAllOrders(params)
       setOrders(res.orders || res.data?.orders || [])
-      setTotalPages(res.totalPages || res.data?.totalPages || 1)
+      setTotalPages(res.pagination?.pages || res.totalPages || res.data?.totalPages || 1)
     } catch (err) {
       console.error('Error fetching orders:', err)
       toast.error('Failed to fetch orders')
@@ -998,7 +1012,7 @@ export default function AdminDashboard() {
       
       const res = await getAllProductsAdmin(params)
       setProducts(res.products || res.data?.products || [])
-      setTotalPages(res.totalPages || res.data?.totalPages || 1)
+      setTotalPages(res.pagination?.pages || res.totalPages || res.data?.totalPages || 1)
     } catch (err) {
       console.error('Error fetching products:', err)
       toast.error('Failed to fetch products')
@@ -1020,14 +1034,68 @@ export default function AdminDashboard() {
       }
       
       const res = await getAllUsers(params)
-      setUsers(res.data?.users || res.users || [])
-      setTotalPages(res.data?.totalPages || res.totalPages || 1)
+      setUsers(Array.isArray(res.data) ? res.data : res.data?.users || res.users || [])
+      setTotalPages(res.pagination?.pages || res.data?.totalPages || res.totalPages || 1)
+      if (res.summary) {
+        setStats(prev => ({
+          ...prev,
+          totalUsers: res.summary.totalUsers ?? prev.totalUsers,
+          totalAdmins: res.summary.totalAdmins ?? prev.totalAdmins
+        }))
+      }
     } catch (err) {
       console.error('Error fetching users:', err)
       toast.error('Failed to fetch users')
       setUsers([])
     } finally {
       setLoading(prev => ({ ...prev, users: false }))
+    }
+  }
+
+  async function handleCreateAdmin(adminData) {
+    try {
+      await createAdminUser(adminData)
+      toast.success('Admin created successfully')
+      fetchUsers()
+      fetchDashboardData()
+      return { success: true }
+    } catch (err) {
+      const message = err.response?.data?.message || 'Failed to create admin'
+      toast.error(message)
+      return { success: false, error: message }
+    }
+  }
+
+  async function handleUpdateUserRole(userId, role) {
+    try {
+      await updateUserRole(userId, role)
+      toast.success(`User role updated to ${role}`)
+      fetchUsers()
+      fetchDashboardData()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update user role')
+    }
+  }
+
+  async function handleToggleUserStatus(userId, isActive) {
+    try {
+      await toggleUserStatus(userId, isActive)
+      toast.success(`User ${isActive ? 'activated' : 'deactivated'} successfully`)
+      fetchUsers()
+      fetchDashboardData()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update user status')
+    }
+  }
+
+  async function handleDeleteUser(userId) {
+    try {
+      await deleteUserAdmin(userId)
+      toast.success('User deleted successfully')
+      fetchUsers()
+      fetchDashboardData()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete user')
     }
   }
 
@@ -1043,8 +1111,8 @@ export default function AdminDashboard() {
       }
       
       const res = await getAllSolarInquiries(params)
-      setSolarInquiries(res.inquiries || res.data?.inquiries || [])
-      setTotalPages(res.totalPages || res.data?.totalPages || 1)
+      setSolarInquiries(Array.isArray(res.data) ? res.data : res.inquiries || res.data?.inquiries || [])
+      setTotalPages(res.pagination?.pages || res.totalPages || res.data?.totalPages || 1)
     } catch (err) {
       console.error('Error fetching solar inquiries:', err)
       setSolarInquiries([])
@@ -1065,8 +1133,8 @@ export default function AdminDashboard() {
       }
       
       const res = await getAllSubsidyApplications(params)
-      setSubsidyApps(res.applications || res.data?.applications || [])
-      setTotalPages(res.totalPages || res.data?.totalPages || 1)
+      setSubsidyApps(Array.isArray(res.data) ? res.data : res.applications || res.data?.applications || [])
+      setTotalPages(res.pagination?.pages || res.totalPages || res.data?.totalPages || 1)
     } catch (err) {
       console.error('Error fetching subsidy applications:', err)
       setSubsidyApps([])
@@ -1170,8 +1238,8 @@ export default function AdminDashboard() {
       const formData = new FormData()
       
       // Validate required fields
-      if (!productForm.name || !productForm.price || !productForm.stock || !productForm.category) {
-        toast.error('Name, price, stock, and category are required')
+      if (!productForm.name || !productForm.description || !productForm.price || !productForm.category) {
+        toast.error('Name, description, price, and category are required')
         setSubmitting(false)
         return
       }
@@ -1181,11 +1249,11 @@ export default function AdminDashboard() {
         if (key === 'images' && productForm.images?.length > 0) {
           // Handle multiple images
           productForm.images.forEach((image) => {
-            formData.append('images', image)
+            formData.append('thumbnails', image)
           })
         } else if (key === 'image' && productForm.image) {
           // Handle single image
-          formData.append('image', productForm.image)
+          formData.append('primary', productForm.image)
         } else if (key === 'tags' && productForm.tags) {
           // Handle tags as JSON string
           const tagsArray = productForm.tags.split(',').map(t => t.trim())
@@ -1379,7 +1447,7 @@ export default function AdminDashboard() {
       description: product.description || '',
       price: product.price?.toString() || '',
       mrp: product.mrp?.toString() || product.price?.toString() || '',
-      category: product.category || '',
+      category: product.category?._id || product.category || '',
       stock: product.stock?.toString() || '',
       image: null,
       images: [],
@@ -1410,9 +1478,8 @@ export default function AdminDashboard() {
 
   // Handle logout
   const handleLogout = () => {
-    // Clear auth token and redirect to login
-    localStorage.removeItem('token')
-    window.location.href = '/login'
+    logout()
+    navigate('/login', { replace: true })
   }
 
   // Get status badge color
@@ -1426,8 +1493,12 @@ export default function AdminDashboard() {
       approved: 'bg-green-100 text-green-800',
       rejected: 'bg-red-100 text-red-800',
       installed: 'bg-green-100 text-green-800',
+      quoted: 'bg-blue-100 text-blue-800',
+      converted: 'bg-green-100 text-green-800',
+      site_visited: 'bg-purple-100 text-purple-800',
       consulted: 'bg-blue-100 text-blue-800',
       'under-review': 'bg-orange-100 text-orange-800',
+      under_review: 'bg-orange-100 text-orange-800',
       submitted: 'bg-gray-100 text-gray-800',
       disbursed: 'bg-indigo-100 text-indigo-800'
     }
@@ -1493,6 +1564,15 @@ export default function AdminDashboard() {
           change="+5.3% from last month"
           icon={IoPeople}
           color="orange"
+          trend="up"
+          onClick={() => setTab('users')}
+        />
+        <ModernStatCard
+          title="Admins"
+          value={stats.totalAdmins}
+          change={`${stats.activeUsers || 0} active users`}
+          icon={IoShield}
+          color="red"
           trend="up"
           onClick={() => setTab('users')}
         />
@@ -1998,9 +2078,14 @@ export default function AdminDashboard() {
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
                 onRefresh={fetchUsers}
+                onCreateAdmin={handleCreateAdmin}
+                onUpdateRole={handleUpdateUserRole}
+                onToggleStatus={handleToggleUserStatus}
+                onDeleteUser={handleDeleteUser}
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
+                totalAdmins={stats.totalAdmins}
                 getStatusBadgeColor={getStatusBadgeColor}
               />
             )}

@@ -14,6 +14,8 @@ export default function ProductPage(){
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [reviewAdding, setReviewAdding] = useState(false)
+  const imageUrl = product?.image || product?.images?.primary || product?.images?.thumbnails?.[0]
+  const categoryName = typeof product?.category === 'object' ? product.category?.name : product?.category
 
   useEffect(() => { fetchProduct() }, [id])
 
@@ -21,7 +23,7 @@ export default function ProductPage(){
     setLoading(true)
     try {
       const res = await API.get(`/products/${id}`)
-      setProduct(res.data)
+      setProduct(res.data.product || res.data.data || res.data)
     } catch (err) {
       console.error(err)
     } finally {
@@ -44,7 +46,7 @@ export default function ProductPage(){
   async function submitReview(){
     setReviewAdding(true)
     try {
-      await API.post(`/products/${id}/review`, { rating: parseInt(rating), comment })
+      await API.post(`/products/${id}/reviews`, { rating: parseInt(rating), comment })
       setComment('')
       setRating(5)
       fetchProduct()
@@ -66,8 +68,8 @@ export default function ProductPage(){
           {/* Image */}
           <div className="md:col-span-1">
             <div className="bg-agro-background rounded-xl aspect-square flex items-center justify-center overflow-hidden sticky top-24">
-              {product.image ? (
-                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+              {imageUrl ? (
+                <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-6xl">🌱</span>
               )}
@@ -76,7 +78,7 @@ export default function ProductPage(){
 
           {/* Details */}
           <div className="md:col-span-2">
-            <Badge color="secondary" className="mb-3">{product.category}</Badge>
+            <Badge color="secondary" className="mb-3">{categoryName || 'Product'}</Badge>
             <h1 className="text-4xl font-bold text-agro-dark mb-2">{product.name}</h1>
             
             {/* Rating */}
@@ -91,7 +93,7 @@ export default function ProductPage(){
 
             {/* Price & Stock */}
             <div className="mb-6">
-              <p className="text-4xl font-bold text-agro-primary">${product.price}</p>
+              <p className="text-4xl font-bold text-agro-primary">₹{product.price}</p>
               <p className={`mt-2 text-sm font-semibold ${product.stock > 0 ? 'text-green-600' : 'text-agro-error'}`}>
                 {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
               </p>
@@ -133,7 +135,7 @@ export default function ProductPage(){
             <div className="grid grid-cols-2 gap-4 p-4 bg-agro-background rounded-xl">
               <div>
                 <p className="text-xs text-gray-600 uppercase font-semibold">Category</p>
-                <p className="font-semibold text-agro-dark capitalize">{product.category}</p>
+                <p className="font-semibold text-agro-dark capitalize">{categoryName || 'Product'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-600 uppercase font-semibold">SKU</p>

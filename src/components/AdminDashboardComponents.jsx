@@ -8,7 +8,7 @@ import {
 } from 'react-icons/io5'
 
 
-import { getAllCategories } from '../api/categoriesAPI';
+import { createCategory, getAllCategories } from '../api/categoriesAPI';
 import { toast } from 'react-hot-toast';
 
 // ==================== STAT CARD ====================
@@ -337,6 +337,8 @@ export function ProductCard({ product, onEdit, onDelete, onView, selected, onSel
 export function ProductForm({ form, onChange, onSubmit, onCancel, editing, submitting }) {
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   // Fetch categories when component mounts
   useEffect(() => {
@@ -375,6 +377,30 @@ export function ProductForm({ form, onChange, onSubmit, onCancel, editing, submi
       onChange({ ...form, [name]: checked });
     } else {
       onChange({ ...form, [name]: value });
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast.error('Enter a category name');
+      return;
+    }
+
+    try {
+      setCreatingCategory(true);
+      const response = await createCategory({ name });
+      const category = response.data || response.category || response;
+      await fetchCategories();
+      if (category?._id) {
+        onChange({ ...form, category: category._id });
+      }
+      setNewCategoryName('');
+      toast.success('Category created successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to create category');
+    } finally {
+      setCreatingCategory(false);
     }
   };
 
@@ -441,9 +467,28 @@ export function ProductForm({ form, onChange, onSubmit, onCancel, editing, submi
                 </select>
               )}
               {!loadingCategories && categories.length === 0 && (
-                <p className="text-sm text-red-500 mt-1">
-                  No categories found. Please create categories first.
-                </p>
+                <div className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                  <p className="text-sm text-yellow-800 mb-2">
+                    No categories found. Create one here to continue.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Category name"
+                      className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateCategory}
+                      disabled={creatingCategory}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {creatingCategory ? 'Creating...' : 'Create'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -799,7 +844,7 @@ export const OrdersTable = ({
         <div>
           <h3 className="text-2xl font-bold">Order Management</h3>
           <p className="text-sm text-gray-500 mt-1">
-            Total: {orders.length} | Pending: {orders.filter(o => o.status === 'pending').length}
+            Total: {orders.length} | Pending: {orders.filter(o => (o.orderStatus || o.status) === 'pending').length}
           </p>
         </div>
         
@@ -812,10 +857,10 @@ export const OrdersTable = ({
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="">Bulk Actions</option>
-                <option value="process">Mark Processing</option>
-                <option value="ship">Mark Shipped</option>
-                <option value="deliver">Mark Delivered</option>
-                <option value="cancel">Cancel Orders</option>
+                <option value="processing">Mark Processing</option>
+                <option value="shipped">Mark Shipped</option>
+                <option value="delivered">Mark Delivered</option>
+                <option value="cancelled">Cancel Orders</option>
               </select>
               {bulkAction && (
                 <Button onClick={onBulkAction} size="sm">
@@ -913,17 +958,17 @@ export const OrdersTable = ({
                   <td className="py-3 px-4 font-mono text-sm">#{order._id?.slice(-8)}</td>
                   <td className="py-3 px-4">
                     <div>
-                      <p className="font-medium">{order.user?.name || order.customerName || 'Guest'}</p>
-                      <p className="text-sm text-gray-500">{order.user?.email || order.email}</p>
+                      <p className="font-medium">{order.userId?.name || order.user?.name || order.customerName || 'Guest'}</p>
+                      <p className="text-sm text-gray-500">{order.userId?.email || order.user?.email || order.email}</p>
                     </div>
                   </td>
                   <td className="py-3 px-4">{order.items?.length || 0} items</td>
                   <td className="py-3 px-4 font-semibold">₹{order.totalAmount?.toLocaleString('en-IN') || 0}</td>
                   <td className="py-3 px-4">
                     <select
-                      value={order.status}
+                      value={order.orderStatus || order.status || 'pending'}
                       onChange={(e) => onUpdateStatus(order._id, e.target.value)}
-                      className={`px-2 py-1 rounded text-sm border ${getStatusBadgeColor(order.status)}`}
+                      className={`px-2 py-1 rounded text-sm border ${getStatusBadgeColor(order.orderStatus || order.status)}`}
                     >
                       <option value="pending">Pending</option>
                       <option value="processing">Processing</option>
@@ -981,19 +1026,116 @@ export const UsersTable = ({
   searchTerm,
   setSearchTerm,
   onRefresh,
+  onCreateAdmin,
+  onUpdateRole,
+  onToggleStatus,
+  onDeleteUser,
   currentPage,
   totalPages,
   onPageChange,
+  totalAdmins = 0,
   getStatusBadgeColor
 }) => {
+  const [showAdminForm, setShowAdminForm] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [adminForm, setAdminForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phoneNumber: ''
+  })
+  const [submittingAdmin, setSubmittingAdmin] = useState(false)
+
+  const resetAdminForm = () => {
+    setAdminForm({
+      name: '',
+      email: '',
+      password: '',
+      phoneNumber: ''
+    })
+  }
+
+  const handleCreateAdmin = async (e) => {
+    e.preventDefault()
+    setSubmittingAdmin(true)
+    const result = await onCreateAdmin(adminForm)
+    setSubmittingAdmin(false)
+
+    if (result?.success) {
+      resetAdminForm()
+      setShowAdminForm(false)
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-md p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-2xl font-bold">User Management</h3>
-        <Button onClick={onRefresh} variant="outline" size="sm">
-          <IoSync className={loading ? 'animate-spin' : ''} /> Refresh
-        </Button>
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+        <div>
+          <h3 className="text-2xl font-bold">User Management</h3>
+          <p className="text-sm text-gray-500">Total admins: {totalAdmins}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowAdminForm(prev => !prev)} size="sm">
+            <IoCreate className="mr-1" /> Create Admin
+          </Button>
+          <Button onClick={onRefresh} variant="outline" size="sm">
+            <IoSync className={loading ? 'animate-spin' : ''} /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {showAdminForm && (
+        <form onSubmit={handleCreateAdmin} className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-green-50 border border-green-100 rounded-xl p-4 mb-6">
+          <input
+            type="text"
+            placeholder="Admin name"
+            value={adminForm.name}
+            onChange={(e) => setAdminForm(prev => ({ ...prev, name: e.target.value }))}
+            className="px-3 py-2 border rounded-lg"
+            required
+          />
+          <input
+            type="email"
+            placeholder="Admin email"
+            value={adminForm.email}
+            onChange={(e) => setAdminForm(prev => ({ ...prev, email: e.target.value }))}
+            className="px-3 py-2 border rounded-lg"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={adminForm.password}
+            onChange={(e) => setAdminForm(prev => ({ ...prev, password: e.target.value }))}
+            className="px-3 py-2 border rounded-lg"
+            minLength={6}
+            required
+          />
+          <input
+            type="tel"
+            placeholder="Phone (optional)"
+            value={adminForm.phoneNumber}
+            onChange={(e) => setAdminForm(prev => ({ ...prev, phoneNumber: e.target.value }))}
+            className="px-3 py-2 border rounded-lg"
+          />
+          <div className="flex gap-2">
+            <Button disabled={submittingAdmin} size="sm" className="flex-1">
+              {submittingAdmin ? 'Creating...' : 'Save'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                resetAdminForm()
+                setShowAdminForm(false)
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
 
       <div className="relative mb-6">
         <IoSearch className="absolute left-3 top-3 text-gray-400" />
@@ -1039,14 +1181,14 @@ export const UsersTable = ({
                       </div>
                       <div>
                         <p className="font-medium">{user.name || user.username || 'User'}</p>
-                        <p className="text-sm text-gray-500">@{user.username || 'username'}</p>
+                        <p className="text-sm text-gray-500">{user._id || user.id}</p>
                       </div>
                     </div>
                   </td>
                   <td className="py-3 px-4">
                     <div>
                       <p className="text-sm">{user.email}</p>
-                      <p className="text-sm text-gray-500">{user.phone || 'N/A'}</p>
+                      <p className="text-sm text-gray-500">{user.phoneNumber || user.phone || 'N/A'}</p>
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -1064,9 +1206,43 @@ export const UsersTable = ({
                     </Badge>
                   </td>
                   <td className="py-3 px-4">
-                    <button className="p-1 text-blue-600 hover:bg-blue-50 rounded">
+                    <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSelectedUser(user)}
+                      className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                      title="View user"
+                    >
                       <IoEye size={18} />
                     </button>
+                    <button
+                      onClick={() => onUpdateRole(user._id || user.id, user.role === 'admin' ? 'user' : 'admin')}
+                      className="px-2 py-1 text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 rounded"
+                      title={user.role === 'admin' ? 'Demote to user' : 'Promote to admin'}
+                    >
+                      {user.role === 'admin' ? 'Make User' : 'Make Admin'}
+                    </button>
+                    <button
+                      onClick={() => onToggleStatus(user._id || user.id, !user.isActive)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        user.isActive
+                          ? 'text-orange-700 bg-orange-50 hover:bg-orange-100'
+                          : 'text-green-700 bg-green-50 hover:bg-green-100'
+                      }`}
+                    >
+                      {user.isActive ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Delete ${user.name || user.email}? This cannot be undone.`)) {
+                          onDeleteUser(user._id || user.id)
+                        }
+                      }}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      title="Delete user"
+                    >
+                      <IoTrash size={18} />
+                    </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1091,6 +1267,57 @@ export const UsersTable = ({
               {i + 1}
             </button>
           ))}
+        </div>
+      )}
+
+      {selectedUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-xl font-bold">User Details</h4>
+              <button onClick={() => setSelectedUser(null)} className="p-1 hover:bg-gray-100 rounded">
+                <IoClose size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Name</span>
+                <span className="font-medium text-right">{selectedUser.name || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Email</span>
+                <span className="font-medium text-right">{selectedUser.email || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Phone</span>
+                <span className="font-medium text-right">{selectedUser.phoneNumber || selectedUser.phone || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Role</span>
+                <span className="font-medium capitalize">{selectedUser.role || 'user'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Status</span>
+                <span className="font-medium">{selectedUser.isActive ? 'Active' : 'Inactive'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Total Orders</span>
+                <span className="font-medium">{selectedUser.totalOrders || selectedUser.ordersCount || 0}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Last Login</span>
+                <span className="font-medium text-right">
+                  {selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString() : 'Never'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-gray-500">Joined</span>
+                <span className="font-medium text-right">
+                  {new Date(selectedUser.createdAt || Date.now()).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1149,7 +1376,7 @@ export const SolarInquiriesTable = ({
                       <p className="text-sm text-gray-500">{inquiry.phone}</p>
                     </div>
                   </td>
-                  <td className="py-3 px-4">{inquiry.systemSize || inquiry.capacity || 'N/A'} kW</td>
+                  <td className="py-3 px-4">{inquiry.systemCapacity || inquiry.systemSize || inquiry.capacity || 'N/A'} kW</td>
                   <td className="py-3 px-4 capitalize">{inquiry.propertyType || 'N/A'}</td>
                   <td className="py-3 px-4">
                     <select
@@ -1161,7 +1388,7 @@ export const SolarInquiriesTable = ({
                       <option value="contacted">Contacted</option>
                       <option value="quoted">Quoted</option>
                       <option value="site_visited">Site Visited</option>
-                      <option value="installed">Installed</option>
+                      <option value="converted">Converted</option>
                       <option value="rejected">Rejected</option>
                     </select>
                   </td>
@@ -1228,8 +1455,8 @@ export const SubsidyApplicationsTable = ({
                 <tr key={app._id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4 font-mono text-sm">#{app.applicationId || app._id?.slice(-8)}</td>
                   <td className="py-3 px-4">
-                    <p className="font-medium">{app.user?.name || app.applicantName || app.name}</p>
-                    <p className="text-sm text-gray-500">{app.user?.email || app.email}</p>
+                    <p className="font-medium">{app.userId?.name || app.user?.name || app.applicantName || app.name}</p>
+                    <p className="text-sm text-gray-500">{app.userId?.email || app.user?.email || app.email}</p>
                   </td>
                   <td className="py-3 px-4">{app.schemeName || app.schemeId?.name || 'N/A'}</td>
                   <td className="py-3 px-4">₹{app.appliedAmount?.toLocaleString('en-IN') || app.amount?.toLocaleString('en-IN') || 0}</td>
@@ -1240,7 +1467,7 @@ export const SubsidyApplicationsTable = ({
                       className={`px-2 py-1 rounded text-sm border ${getStatusBadgeColor(app.status)}`}
                     >
                       <option value="submitted">Submitted</option>
-                      <option value="under-review">Under Review</option>
+                      <option value="under_review">Under Review</option>
                       <option value="approved">Approved</option>
                       <option value="rejected">Rejected</option>
                       <option value="disbursed">Disbursed</option>
@@ -1309,8 +1536,8 @@ export const ServiceRequestsTable = ({
                 <tr key={request._id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4 font-mono text-sm">#{request.requestId || request._id?.slice(-8)}</td>
                   <td className="py-3 px-4">
-                    <p className="font-medium">{request.user?.name || request.customerName || request.name}</p>
-                    <p className="text-sm text-gray-500">{request.user?.phone || request.phone}</p>
+                    <p className="font-medium">{request.userId?.name || request.user?.name || request.customerName || request.name}</p>
+                    <p className="text-sm text-gray-500">{request.userId?.phone || request.userId?.email || request.user?.phone || request.phone}</p>
                   </td>
                   <td className="py-3 px-4 capitalize">{request.serviceType || request.type}</td>
                   <td className="py-3 px-4 text-sm">{request.location?.address || request.address || 'N/A'}</td>
@@ -1321,7 +1548,9 @@ export const ServiceRequestsTable = ({
                       className={`px-2 py-1 rounded text-sm border ${getStatusBadgeColor(request.status)}`}
                     >
                       <option value="pending">Pending</option>
-                      <option value="processing">Processing</option>
+                      <option value="quoted">Quoted</option>
+                      <option value="approved">Approved</option>
+                      <option value="installed">Installed</option>
                       <option value="completed">Completed</option>
                       <option value="cancelled">Cancelled</option>
                     </select>

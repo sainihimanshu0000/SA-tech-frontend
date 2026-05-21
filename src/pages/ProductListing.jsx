@@ -7,7 +7,7 @@ import {
   IoFilterSharp, IoClose, IoSearch, IoArrowUp, 
   IoArrowDown, IoStar, IoGrid, IoList,
   IoChevronDown, IoChevronUp, IoHeart, IoHeartOutline,
-  IoLeaf, IoFlask, IoSunny, IoWater, IoFlash,
+  IoSunny, IoWater, IoFlash,
   IoPricetag, IoBag, IoTime, IoLocation
 } from 'react-icons/io5'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -45,8 +45,6 @@ const getCategoryIcon = (category) => {
     'bio waste': '♻️',
     tools: '🛠️',
     solar: <IoSunny className="inline" />,
-    seeds: <IoLeaf className="inline" />,
-    fertilizers: <IoFlask className="inline" />,
     irrigation: <IoWater className="inline" />,
     equipment: <IoFlash className="inline" />
   }
@@ -145,7 +143,7 @@ export default function ProductListing() {
         limit: 12,
         ...(filters.category && { category: filters.category }),
         ...(filters.search && { search: filters.search }),
-        ...(filters.sortBy && { sort: filters.sortBy }),
+        ...(filters.sortBy && { sortBy: filters.sortBy }),
         ...(filters.priceRange.min > 0 && { minPrice: filters.priceRange.min }),
         ...(filters.priceRange.max < 100000 && { maxPrice: filters.priceRange.max }),
         ...(filters.rating > 0 && { rating: filters.rating }),
@@ -154,8 +152,8 @@ export default function ProductListing() {
 
       const res = await API.get(`/products?${queryParams}`)
       setProducts(res.data.products || res.data.data || [])
-      setPages(res.data.pages || res.data.totalPages || 1)
-      setTotalProducts(res.data.total || res.data.totalProducts || 0)
+      setPages(res.data.pagination?.pages || res.data.pages || res.data.totalPages || 1)
+      setTotalProducts(res.data.pagination?.total || res.data.total || res.data.totalProducts || 0)
       
       // Update price range from response if available
       if (res.data.priceRange) {

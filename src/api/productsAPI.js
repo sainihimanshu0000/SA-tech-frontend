@@ -28,10 +28,10 @@ export const getFeaturedProducts = async (limit = 6) => {
 // Get bestseller products
 export const getBestsellerProducts = async (limit = 6) => {
   try {
-    const response = await API.get('/products/bestsellers', {
+    const response = await API.get('/products/bestseller', {
       params: { limit }
     })
-    return response.data
+    return response.data.data || response.data.products || response.data
   } catch (error) {
     throw error
   }
@@ -40,8 +40,8 @@ export const getBestsellerProducts = async (limit = 6) => {
 // Get product by ID
 export const getProductById = async (id) => {
   try {
-    const response = await API.get(`/products/${id}`)
-    return response.data
+    const response = await API.get(`/products/id/${id}`)
+    return response.data.product || response.data.data || response.data
   } catch (error) {
     throw error
   }
@@ -50,8 +50,8 @@ export const getProductById = async (id) => {
 // Search products
 export const searchProducts = async (query, page = 1, limit = 12) => {
   try {
-    const response = await API.get('/products/search', {
-      params: { q: query, page, limit }
+    const response = await API.get('/products', {
+      params: { search: query, page, limit }
     })
     return response.data
   } catch (error) {
@@ -62,7 +62,7 @@ export const searchProducts = async (query, page = 1, limit = 12) => {
 // Get filtered products
 export const getFilteredProducts = async (filters, page = 1, limit = 12) => {
   try {
-    const response = await API.get('/products/filter', {
+    const response = await API.get('/products', {
       params: { ...filters, page, limit }
     })
     return response.data
@@ -74,9 +74,7 @@ export const getFilteredProducts = async (filters, page = 1, limit = 12) => {
 // Create product (admin only)
 export const createProduct = async (productData) => {
   try {
-    const response = await API.post('/products', productData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    const response = await API.post('/products', productData)
     return response.data
   } catch (error) {
     throw error

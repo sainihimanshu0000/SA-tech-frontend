@@ -1,0 +1,5 @@
+@layer components {
+  .emi-calculator-screen {
+    @apply min-h-screen bg-gray-50;
+  }
+}

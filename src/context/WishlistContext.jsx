@@ -13,7 +13,7 @@ export const WishlistProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get('/api/wishlist');
+      const response = await axios.get('/wishlist');
       setWishlistItems(response.data.wishlist || []);
       return response.data.wishlist;
     } catch (err) {
@@ -42,7 +42,7 @@ export const WishlistProvider = ({ children }) => {
   // Add to wishlist
   const addToWishlist = useCallback(async (productId) => {
     try {
-      const response = await axios.post(`/api/wishlist/${productId}`);
+      const response = await axios.post(`/wishlist/${productId}`);
       setWishlistItems(prev => [...prev, response.data.product]);
       return response.data;
     } catch (err) {
@@ -56,7 +56,7 @@ export const WishlistProvider = ({ children }) => {
   // Remove from wishlist
   const removeFromWishlist = useCallback(async (productId) => {
     try {
-      await axios.delete(`/api/wishlist/${productId}`);
+      await axios.delete(`/wishlist/${productId}`);
       setWishlistItems(prev => prev.filter(item => item._id !== productId));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to remove from wishlist');
@@ -83,7 +83,7 @@ export const WishlistProvider = ({ children }) => {
   // Clear wishlist
   const clearWishlist = useCallback(async () => {
     try {
-      await axios.delete('/api/wishlist');
+      await axios.delete('/wishlist');
       setWishlistItems([]);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to clear wishlist');

@@ -325,7 +325,7 @@ export default function CartPage() {
                     }`}
                   >
                     {/* Product Image */}
-                    <Link to={`/products/${item.product._id}`} className="w-24 h-24 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden group">
+                    <Link to={`/product/${item.product._id}`} className="w-24 h-24 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden group">
                       {item.product.image ? (
                         <img 
                           src={item.product.image} 
@@ -343,7 +343,7 @@ export default function CartPage() {
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <Link to={`/products/${item.product._id}`} className="hover:text-green-600">
+                          <Link to={`/product/${item.product._id}`} className="hover:text-green-600">
                             <h3 className="font-bold text-gray-800 text-lg">{item.product.name}</h3>
                           </Link>
                           <p className="text-sm text-gray-500 mb-2 capitalize">{item.product.category}</p>
@@ -587,7 +587,7 @@ export default function CartPage() {
                   {relatedProducts.map(product => (
                     <Link 
                       key={product._id} 
-                      to={`/products/${product._id}`}
+                      to={`/product/${product._id}`}
                       className="bg-white rounded-xl shadow-md p-3 hover:shadow-lg transition group"
                     >
                       <img 

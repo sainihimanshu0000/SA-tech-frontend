@@ -30,15 +30,7 @@ export const ProtectedRoute = ({ children, adminOnly = false, redirectTo = '/log
 
   // Check for admin access if required
   if (adminOnly && user?.role !== 'admin') {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-red-600 mb-4">Access Denied</h1>
-          <p className="text-gray-600 mb-6">You don't have permission to access this page.</p>
-          <Navigate to="/" replace />
-        </div>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
 
   // Render the protected component if authenticated and authorized

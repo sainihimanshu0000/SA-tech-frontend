@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { 
   IoArrowForward, IoLeaf, IoFlask, IoSpeedometer, IoCart,
   IoChevronForward, IoStar, IoTime, IoShield,
@@ -13,9 +13,25 @@ import {
   IoHardwareChip, IoNewspaper, IoVideocam,
   IoPlay, IoPause, IoArrowBack, IoArrowForwardCircle,
   IoLocation, IoBusiness, IoHome, IoLogoFacebook,
-  IoLogoTwitter, IoLogoInstagram
+  IoLogoTwitter, IoLogoInstagram, IoGrid, IoHeart,
+  IoShare, IoBookmark, IoNotifications, IoMenu,
+  IoApps, IoOptions, IoFilter, IoDownload,
+  IoPrint, IoCopy, IoLink, IoQrCode,
+  IoCamera, IoImage, IoVideocamOutline,
+  // IoMusicalNotes, IoVolumeHigh, IoVolumeMute,
+  // IoVolumeOff, IoMic, IoMicOff, IoHeadset,
+  // IoHeadsetOutline, IoRadio, IoRadioOutline,
+  // IoVideocamOff, IoVideocamOutline, IoCameraOff,
+  // IoCameraOutline, IoImageOutline, IoImagesOutline,
+  // IoAlbums, IoAlbumsOutline, IoLibrary, IoLibraryOutline
 } from 'react-icons/io5'
 import { motion, useAnimation, useInView, AnimatePresence } from 'framer-motion'
+import { toast } from 'react-hot-toast'
+import API from '../api/axios'
+import { getAllProducts, getFeaturedProducts } from '../api/productsAPI'
+import { getAllCategories } from '../api/categoriesAPI'
+import { getAllBlogPosts } from '../api/blogAPI'
+import { useAuth } from '../hooks/useAuth'
 
 // Font Family Configuration
 const fontFamily = {
@@ -23,16 +39,81 @@ const fontFamily = {
   body: "'Inter', sans-serif"
 }
 
+const fallbackProductImage = 'https://images.unsplash.com/photo-1592982537447-6f2a6a0c7e5b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+const fallbackBlogImage = 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+
+const getImageUrl = (image) => {
+  if (!image) return ''
+  if (typeof image === 'string') return image
+  return image.url || image.secure_url || ''
+}
+
+const getProductImage = (product) => {
+  const primary = getImageUrl(product.images?.primary)
+  const thumbnail = Array.isArray(product.images?.thumbnails)
+    ? getImageUrl(product.images.thumbnails[0])
+    : ''
+  return product.image || primary || thumbnail || fallbackProductImage
+}
+
+const getCategoryValue = (category) => {
+  if (!category) return ''
+  if (typeof category === 'string') return category
+  return category.slug || category._id || category.id || category.name || ''
+}
+
+const normalizeProduct = (product) => {
+  const categoryValue = getCategoryValue(product.category)
+  return {
+    ...product,
+    id: product._id || product.id,
+    image: getProductImage(product),
+    category: categoryValue,
+    categoryName: product.category?.name || categoryValue,
+    rating: Math.round(product.avgRating || product.rating || 0),
+    reviews: product.totalReviews || product.reviews?.length || product.reviews || 0,
+    discount: product.discountPercentage > 0
+      ? Math.round(product.discountPercentage)
+      : product.discount || 0,
+    productUrl: `/product/${product._id || product.id || product.slug}`,
+  }
+}
+
+const normalizeCategory = (category) => ({
+  id: category.slug || category._id || category.id || category.name,
+  name: category.name || category.label || 'Category',
+})
+
+const normalizeBlogPost = (post) => ({
+  ...post,
+  id: post.slug || post._id || post.id,
+  image: post.image || fallbackBlogImage,
+  date: post.createdAt
+    ? new Date(post.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : post.date || '',
+  readTime: post.readTime || Math.max(3, Math.ceil((post.content?.split(/\s+/).length || 600) / 200)),
+})
+
 // ==================== SKELETON LOADER COMPONENT ====================
-const SkeletonLoader = ({ count = 4 }) => {
+const SkeletonLoader = ({ count = 4, type = 'product' }) => {
   return (
     <>
       {[...Array(count)].map((_, i) => (
         <div key={i} className="bg-white rounded-xl p-4 animate-pulse">
-          <div className="h-48 bg-gray-200 rounded-lg mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-          <div className="h-8 bg-gray-200 rounded"></div>
+          {type === 'product' ? (
+            <>
+              <div className="h-48 bg-gradient-to-r from-gray-200 to-gray-300 rounded-lg mb-4"></div>
+              <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-3/4 mb-2"></div>
+              <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-1/2 mb-4"></div>
+              <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded"></div>
+            </>
+          ) : (
+            <>
+              <div className="h-32 bg-gradient-to-r from-gray-200 to-gray-300 rounded-lg mb-4"></div>
+              <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-3/4 mb-2"></div>
+              <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-1/2"></div>
+            </>
+          )}
         </div>
       ))}
     </>
@@ -40,72 +121,167 @@ const SkeletonLoader = ({ count = 4 }) => {
 }
 
 // ==================== CATEGORY CARD COMPONENT ====================
-const CategoryCard = ({ icon: Icon, title, color, onClick }) => (
+const CategoryCard = ({ icon: Icon, title, color, onClick, delay = 0 }) => (
   <motion.div
-    whileHover={{ y: -5 }}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay, duration: 0.5 }}
+    whileHover={{ y: -10, scale: 1.02 }}
+    whileTap={{ scale: 0.98 }}
     onClick={onClick}
-    className="bg-white rounded-xl shadow-lg p-6 cursor-pointer group"
+    className="bg-white rounded-xl shadow-lg p-6 cursor-pointer group relative overflow-hidden"
     style={{ borderBottom: `4px solid ${color}` }}
   >
-    <div className="flex flex-col items-center text-center">
-      <div className={`w-16 h-16 rounded-full bg-opacity-10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}
-           style={{ backgroundColor: `${color}20` }}>
-        <Icon className="text-3xl" style={{ color }} />
-      </div>
-      <h3 className="font-semibold text-gray-800" style={{ fontFamily: fontFamily.heading }}>{title}</h3>
+    <motion.div
+      className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-10 transition-opacity"
+      style={{ background: `linear-gradient(135deg, ${color} 0%, ${color}80 100%)` }}
+    />
+    <div className="flex flex-col items-center text-center relative z-10">
+      <motion.div 
+        className={`w-20 h-20 rounded-full bg-opacity-10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}
+        style={{ backgroundColor: `${color}20` }}
+        whileHover={{ rotate: 360 }}
+        transition={{ duration: 0.6 }}
+      >
+        <Icon className="text-4xl" style={{ color }} />
+      </motion.div>
+      <h3 className="font-semibold text-gray-800 text-lg" style={{ fontFamily: fontFamily.heading }}>{title}</h3>
+      <motion.div
+        initial={{ width: 0 }}
+        whileHover={{ width: '50%' }}
+        className="h-0.5 bg-gradient-to-r mt-2"
+        style={{ background: `linear-gradient(90deg, ${color} 0%, ${color}80 100%)` }}
+      />
     </div>
   </motion.div>
 )
 
 // ==================== PRODUCT CARD COMPONENT ====================
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, index, onAddToCart, onToggleWishlist, onShare, onQuickView }) => {
   const [imageError, setImageError] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [isLiked, setIsLiked] = useState(false)
   
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5 }}
-      className="bg-white rounded-xl shadow-lg overflow-hidden group"
+      transition={{ delay: index * 0.1, duration: 0.5 }}
+      whileHover={{ y: -10 }}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
+      className="bg-white rounded-xl shadow-lg overflow-hidden group relative"
     >
+      {/* Like Button */}
+      <motion.button
+        type="button"
+        initial={{ scale: 0 }}
+        animate={{ scale: isHovered ? 1 : 0 }}
+        whileHover={{ scale: 1.1 }}
+        onClick={async () => {
+          const toggled = await onToggleWishlist(product)
+          if (toggled) setIsLiked(prev => !prev)
+        }}
+        className="absolute top-2 right-2 z-20 bg-white p-2 rounded-full shadow-lg"
+      >
+        <IoHeart className={`text-xl ${isLiked ? 'text-red-500 fill-current' : 'text-gray-400'}`} />
+      </motion.button>
+
+      {/* Image Container */}
       <div className="relative h-48 overflow-hidden">
         {!imageError ? (
-          <img 
-            src={product.image || product.images?.[0] || 'https://images.unsplash.com/photo-1592982537447-6f2a6a0c7e5b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'} 
+          <motion.img 
+            src={product.image || fallbackProductImage} 
             alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+            className="w-full h-full object-cover"
+            animate={{ scale: isHovered ? 1.1 : 1 }}
+            transition={{ duration: 0.4 }}
             onError={() => setImageError(true)}
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-            <IoLeaf className="text-6xl text-white" />
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            >
+              <IoLeaf className="text-6xl text-white" />
+            </motion.div>
           </div>
         )}
-        {product.discount > 0 && (
-          <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-            {product.discount}% OFF
-          </span>
-        )}
-        {product.isNew && (
-          <span className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
-            New
-          </span>
-        )}
+        
+        {/* Badges */}
+        <AnimatePresence>
+          {product.discount > 0 && (
+            <motion.span
+              initial={{ x: -100 }}
+              animate={{ x: 0 }}
+              exit={{ x: -100 }}
+              className="absolute top-2 left-2 bg-red-500 text-white text-xs px-3 py-1 rounded-full font-semibold"
+            >
+              {product.discount}% OFF
+            </motion.span>
+          )}
+          {product.isNew && (
+            <motion.span
+              initial={{ x: 100 }}
+              animate={{ x: 0 }}
+              exit={{ x: 100 }}
+              className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-semibold"
+            >
+              New
+            </motion.span>
+          )}
+        </AnimatePresence>
+
+        {/* Quick View Overlay */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: isHovered ? 1 : 0 }}
+          className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2"
+        >
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onQuickView(product)}
+            className="bg-white p-3 rounded-full"
+          >
+            <IoSearch className="text-gray-800" />
+          </motion.button>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onShare(product)}
+            className="bg-white p-3 rounded-full"
+          >
+            <IoShare className="text-gray-800" />
+          </motion.button>
+        </motion.div>
       </div>
       
+      {/* Content */}
       <div className="p-4">
-        <h3 className="font-semibold text-gray-800 mb-1 line-clamp-1" style={{ fontFamily: fontFamily.heading }}>{product.name}</h3>
+        <h3 className="font-semibold text-gray-800 mb-1 line-clamp-1 text-lg" style={{ fontFamily: fontFamily.heading }}>{product.name}</h3>
         
+        {/* Rating */}
         <div className="flex items-center gap-1 mb-2">
           {[...Array(5)].map((_, i) => (
-            <IoStar 
-              key={i} 
-              className={`text-sm ${i < (product.rating || 4) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
-            />
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.1 }}
+            >
+              <IoStar 
+                className={`text-sm ${i < (product.rating || 4) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+              />
+            </motion.div>
           ))}
           <span className="text-xs text-gray-500 ml-1">({product.reviews || 0})</span>
         </div>
         
+        {/* Price */}
         <div className="flex items-center justify-between mb-3">
           <div>
             <span className="text-xl font-bold text-green-600">₹{product.price}</span>
@@ -115,71 +291,140 @@ const ProductCard = ({ product }) => {
           </div>
         </div>
         
-        <button className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-          <IoCart /> Add to Cart
-        </button>
+        {/* Add to Cart Button */}
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => onAddToCart(product)}
+          disabled={product.stock === 0}
+          className="w-full bg-gradient-to-r from-green-600 to-green-500 text-white py-3 rounded-lg hover:from-green-700 hover:to-green-600 transition flex items-center justify-center gap-2 font-semibold relative overflow-hidden group"
+        >
+          <motion.div
+            className="absolute inset-0 bg-white"
+            initial={{ x: '-100%' }}
+            whileHover={{ x: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ opacity: 0.2 }}
+          />
+          <IoCart className="text-xl" />
+          {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+        </motion.button>
       </div>
     </motion.div>
   )
 }
 
 // ==================== SERVICE CARD COMPONENT ====================
-const ServiceCard = ({ icon: Icon, title, features, color, link }) => (
+const ServiceCard = ({ icon: Icon, title, features, color, link, index }) => (
   <motion.div
-    whileHover={{ y: -5 }}
-    className="bg-white rounded-xl shadow-lg overflow-hidden"
+    initial={{ opacity: 0, y: 30 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    transition={{ delay: index * 0.1, duration: 0.5 }}
+    whileHover={{ y: -10 }}
+    viewport={{ once: true }}
+    className="bg-white rounded-xl shadow-lg overflow-hidden group"
   >
-    <div className="h-32 flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
-      <Icon className="text-5xl" style={{ color }} />
-    </div>
+    <motion.div 
+      className="h-40 flex items-center justify-center relative overflow-hidden"
+      style={{ backgroundColor: `${color}15` }}
+      whileHover={{ scale: 1.1 }}
+    >
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-20"
+        style={{ background: `linear-gradient(135deg, ${color} 0%, ${color}80 100%)` }}
+        animate={{ scale: [1, 1.2, 1] }}
+        transition={{ duration: 2, repeat: Infinity }}
+      />
+      <Icon className="text-6xl relative z-10" style={{ color }} />
+    </motion.div>
     <div className="p-6">
       <h3 className="text-xl font-bold text-gray-800 mb-3" style={{ fontFamily: fontFamily.heading }}>{title}</h3>
       <ul className="space-y-2 mb-4">
         {features.map((feature, i) => (
-          <li key={i} className="flex items-center gap-2 text-sm text-gray-600" style={{ fontFamily: fontFamily.body }}>
-            <IoCheckmarkCircle className="text-green-600 text-sm" />
-            {feature}
-          </li>
+          <motion.li 
+            key={i} 
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="flex items-center gap-2 text-sm text-gray-600"
+            style={{ fontFamily: fontFamily.body }}
+          >
+            <IoCheckmarkCircle className="text-green-600 text-sm flex-shrink-0" />
+            <span>{feature}</span>
+          </motion.li>
         ))}
       </ul>
-      <Link 
-        to={link}
-        className="inline-flex items-center gap-2 font-semibold"
-        style={{ color, fontFamily: fontFamily.body }}
+      <motion.div
+        whileHover={{ x: 10 }}
+        transition={{ type: "spring", stiffness: 400 }}
       >
-        Learn More <IoArrowForward />
-      </Link>
+        <Link 
+          to={link}
+          className="inline-flex items-center gap-2 font-semibold"
+          style={{ color, fontFamily: fontFamily.body }}
+        >
+          Learn More <IoArrowForward />
+        </Link>
+      </motion.div>
     </div>
   </motion.div>
 )
 
 // ==================== TESTIMONIAL CARD COMPONENT ====================
-const TestimonialCard = ({ name, location, content, rating, image }) => (
-  <div className="bg-white rounded-xl shadow-lg p-6">
+const TestimonialCard = ({ name, location, content, rating, image, index }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.9 }}
+    whileInView={{ opacity: 1, scale: 1 }}
+    transition={{ delay: index * 0.1 }}
+    whileHover={{ y: -5 }}
+    className="bg-white rounded-xl shadow-lg p-6"
+  >
     <div className="flex items-center gap-1 mb-3">
       {[...Array(5)].map((_, i) => (
-        <IoStar key={i} className={i < rating ? 'text-yellow-400 fill-current' : 'text-gray-300'} />
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: i * 0.1 }}
+        >
+          <IoStar className={i < rating ? 'text-yellow-400 fill-current' : 'text-gray-300'} />
+        </motion.div>
       ))}
     </div>
-    <p className="text-gray-600 mb-4 italic" style={{ fontFamily: fontFamily.body }}>"{content}"</p>
+    <motion.p 
+      className="text-gray-600 mb-4 italic" 
+      style={{ fontFamily: fontFamily.body }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      transition={{ delay: 0.2 }}
+    >
+      "{content}"
+    </motion.p>
     <div className="flex items-center gap-3">
-      <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-400 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden">
+      <motion.div 
+        className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-400 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden"
+        whileHover={{ scale: 1.1, rotate: 10 }}
+        transition={{ type: "spring", stiffness: 300 }}
+      >
         {image ? (
           <img src={image} alt={name} className="w-full h-full rounded-full object-cover" />
         ) : (
           <IoHappy className="text-2xl" />
         )}
-      </div>
+      </motion.div>
       <div>
         <h4 className="font-semibold text-gray-800" style={{ fontFamily: fontFamily.heading }}>{name}</h4>
         <p className="text-sm text-gray-500" style={{ fontFamily: fontFamily.body }}>{location}</p>
       </div>
     </div>
-  </div>
+  </motion.div>
 )
 
 // ==================== WHATSAPP BUTTON COMPONENT ====================
 const WhatsAppButton = () => {
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
     <motion.a
       href="https://wa.me/919876543210?text=Hello%20I%20need%20help%20with%20AgroMart"
@@ -188,9 +433,16 @@ const WhatsAppButton = () => {
       initial={{ scale: 0 }}
       animate={{ scale: 1 }}
       whileHover={{ scale: 1.1 }}
-      className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg z-50 hover:bg-green-600 transition"
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
+      className="fixed bottom-6 right-6 bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-full shadow-lg z-50 hover:from-green-600 hover:to-green-700 transition-all"
     >
-      <IoLogoWhatsapp className="text-2xl" />
+      <motion.div
+        animate={{ rotate: isHovered ? 360 : 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <IoLogoWhatsapp className="text-2xl" />
+      </motion.div>
     </motion.a>
   )
 }
@@ -201,12 +453,23 @@ const fadeInUp = {
   visible: { opacity: 1, y: 0 }
 }
 
+const fadeInLeft = {
+  hidden: { opacity: 0, x: -60 },
+  visible: { opacity: 1, x: 0 }
+}
+
+const fadeInRight = {
+  hidden: { opacity: 0, x: 60 },
+  visible: { opacity: 1, x: 0 }
+}
+
 const staggerContainer = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.2
+      staggerChildren: 0.2,
+      delayChildren: 0.3
     }
   }
 }
@@ -216,11 +479,24 @@ const scaleIn = {
   visible: { scale: 1, opacity: 1 }
 }
 
+const rotateIn = {
+  hidden: { rotate: -180, opacity: 0 },
+  visible: { rotate: 0, opacity: 1 }
+}
+
 // ==================== ANIMATED SECTION WRAPPER ====================
-const AnimatedSection = ({ children, className, delay = 0 }) => {
+const AnimatedSection = ({ children, className, delay = 0, direction = 'up' }) => {
   const controls = useAnimation()
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, amount: 0.3 })
+
+  const variants = {
+    up: fadeInUp,
+    left: fadeInLeft,
+    right: fadeInRight,
+    scale: scaleIn,
+    rotate: rotateIn
+  }
 
   useEffect(() => {
     if (inView) {
@@ -233,7 +509,7 @@ const AnimatedSection = ({ children, className, delay = 0 }) => {
       ref={ref}
       animate={controls}
       initial="hidden"
-      variants={fadeInUp}
+      variants={variants[direction]}
       transition={{ duration: 0.6, delay }}
       className={className}
     >
@@ -266,20 +542,26 @@ const Counter = ({ end, duration = 2, suffix = '' }) => {
   }, [inView, end, duration])
 
   return (
-    <span ref={ref} className="text-3xl font-bold">
+    <motion.span 
+      ref={ref} 
+      className="text-4xl font-bold"
+      initial={{ scale: 0.5 }}
+      animate={{ scale: 1 }}
+      transition={{ type: "spring", stiffness: 100 }}
+    >
       {count.toLocaleString()}{suffix}
-    </span>
+    </motion.span>
   )
 }
 
 // ==================== MARQUEE ====================
 const Marquee = ({ items, speed = 30 }) => {
   return (
-    <div className="overflow-hidden bg-white py-3 border-y border-gray-200">
+    <div className="overflow-hidden bg-gradient-to-r from-green-600 via-green-500 to-green-600 py-4">
       <motion.div
         className="flex whitespace-nowrap"
         animate={{
-          x: [0, -1000]
+          x: [0, -2000]
         }}
         transition={{
           duration: speed,
@@ -287,11 +569,15 @@ const Marquee = ({ items, speed = 30 }) => {
           ease: "linear"
         }}
       >
-        {items.concat(items).map((item, index) => (
-          <div key={index} className="flex items-center mx-8">
-            <item.icon className="text-[#2E7D32] text-xl mr-2" />
-            <span className="text-gray-700 font-medium">{item.text}</span>
-          </div>
+        {items.concat(items).concat(items).map((item, index) => (
+          <motion.div 
+            key={index} 
+            className="flex items-center mx-8"
+            whileHover={{ scale: 1.1 }}
+          >
+            <item.icon className="text-white text-xl mr-2" />
+            <span className="text-white font-medium">{item.text}</span>
+          </motion.div>
         ))}
       </motion.div>
     </div>
@@ -313,25 +599,28 @@ const VideoSection = () => {
   }
 
   return (
-    <section className="relative h-[500px] overflow-hidden">
-      <video
+    <section className="relative h-[600px] overflow-hidden">
+      <motion.video
         ref={videoRef}
         autoPlay
         loop
         muted
         playsInline
         className="absolute inset-0 w-full h-full object-cover"
+        initial={{ scale: 1.2 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 20 }}
       >
         <source src="https://player.vimeo.com/external/370331467.sd.mp4?s=90c2c13b7d5fdb5c27c5a3c6d3e0b8b7f9e8d7c6f&profile_id=164" type="video/mp4" />
-      </video>
+      </motion.video>
       
-      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/70 flex items-center justify-center">
         <div className="text-center text-white">
           <motion.h2 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-5xl font-bold mb-4"
+            className="text-5xl md:text-6xl font-bold mb-4"
             style={{ fontFamily: fontFamily.heading }}
           >
             Modern Farming Starts Here
@@ -340,7 +629,7 @@ const VideoSection = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-xl mb-8 max-w-2xl mx-auto"
+            className="text-xl md:text-2xl mb-8 max-w-2xl mx-auto"
           >
             See how technology is transforming agriculture
           </motion.p>
@@ -348,13 +637,48 @@ const VideoSection = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={toggleVideo}
-            className="bg-white text-[#2E7D32] px-8 py-3 rounded-full font-semibold hover:bg-green-50 transition flex items-center gap-2 mx-auto"
+            className="bg-white text-green-600 px-8 py-3 rounded-full font-semibold hover:bg-green-50 transition flex items-center gap-2 mx-auto shadow-xl"
           >
-            {isPlaying ? <IoPause /> : <IoPlay />} {isPlaying ? 'Pause' : 'Play'} Video
+            <motion.div
+              animate={{ rotate: isPlaying ? 0 : 360 }}
+              transition={{ duration: 0.5 }}
+            >
+              {isPlaying ? <IoPause /> : <IoPlay />}
+            </motion.div>
+            {isPlaying ? 'Pause' : 'Play'} Video
           </motion.button>
         </div>
       </div>
+
+      {/* Floating Elements */}
+      <motion.div
+        className="absolute top-20 left-20 w-20 h-20 bg-white/20 rounded-full"
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.5, 0.8, 0.5]
+        }}
+        transition={{
+          duration: 4,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+      <motion.div
+        className="absolute bottom-20 right-20 w-32 h-32 bg-white/20 rounded-full"
+        animate={{
+          scale: [1, 1.3, 1],
+          opacity: [0.3, 0.6, 0.3]
+        }}
+        transition={{
+          duration: 5,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 1
+        }}
+      />
     </section>
   )
 }
@@ -362,69 +686,139 @@ const VideoSection = () => {
 // ==================== TESTIMONIAL SLIDER ====================
 const TestimonialSlider = ({ testimonials }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [direction, setDirection] = useState(0)
 
   const next = () => {
+    setDirection(1)
     setCurrentIndex((prev) => (prev + 1) % testimonials.length)
   }
 
   const prev = () => {
+    setDirection(-1)
     setCurrentIndex((prev) => (prev - 1 + testimonials.length) % testimonials.length)
   }
 
+  const slideVariants = {
+    enter: (direction) => ({
+      x: direction > 0 ? 1000 : -1000,
+      opacity: 0
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1
+    },
+    exit: (direction) => ({
+      zIndex: 0,
+      x: direction < 0 ? 1000 : -1000,
+      opacity: 0
+    })
+  }
+
   return (
-    <div className="relative">
-      <AnimatePresence mode="wait">
+    <div className="relative px-4">
+      <AnimatePresence mode="wait" custom={direction}>
         <motion.div
           key={currentIndex}
-          initial={{ opacity: 0, x: 100 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -100 }}
-          transition={{ duration: 0.5 }}
+          custom={direction}
+          variants={slideVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{
+            x: { type: "spring", stiffness: 300, damping: 30 },
+            opacity: { duration: 0.2 }
+          }}
           className="bg-white rounded-2xl shadow-xl p-8 md:p-12"
         >
           <div className="flex flex-col md:flex-row gap-8 items-center">
-            <div className="w-32 h-32 rounded-full overflow-hidden flex-shrink-0">
+            <motion.div 
+              className="w-32 h-32 rounded-full overflow-hidden flex-shrink-0"
+              whileHover={{ scale: 1.1, rotate: 10 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
               <img 
                 src={testimonials[currentIndex].image} 
                 alt={testimonials[currentIndex].name}
                 className="w-full h-full object-cover"
               />
-            </div>
+            </motion.div>
             <div className="flex-1">
-              <div className="flex items-center gap-1 mb-4">
+              <motion.div 
+                className="flex items-center gap-1 mb-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
                 {[...Array(5)].map((_, i) => (
-                  <IoStar key={i} className={i < testimonials[currentIndex].rating ? 'text-yellow-400 fill-current text-xl' : 'text-gray-300 text-xl'} />
+                  <motion.div
+                    key={i}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: i * 0.1 }}
+                  >
+                    <IoStar className={i < testimonials[currentIndex].rating ? 'text-yellow-400 fill-current text-xl' : 'text-gray-300 text-xl'} />
+                  </motion.div>
                 ))}
-              </div>
-              <p className="text-gray-700 text-lg mb-4 italic">"{testimonials[currentIndex].content}"</p>
-              <h4 className="font-bold text-xl text-gray-800">{testimonials[currentIndex].name}</h4>
-              <p className="text-gray-500">{testimonials[currentIndex].location}</p>
+              </motion.div>
+              <motion.p 
+                className="text-gray-700 text-lg mb-4 italic"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                "{testimonials[currentIndex].content}"
+              </motion.p>
+              <motion.h4 
+                className="font-bold text-xl text-gray-800"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
+                {testimonials[currentIndex].name}
+              </motion.h4>
+              <motion.p 
+                className="text-gray-500"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                {testimonials[currentIndex].location}
+              </motion.p>
             </div>
           </div>
         </motion.div>
       </AnimatePresence>
 
-      <button
+      <motion.button
+        whileHover={{ scale: 1.1, x: -5 }}
+        whileTap={{ scale: 0.9 }}
         onClick={prev}
-        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50"
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 z-10"
       >
         <IoArrowBack size={24} />
-      </button>
-      <button
+      </motion.button>
+      <motion.button
+        whileHover={{ scale: 1.1, x: 5 }}
+        whileTap={{ scale: 0.9 }}
         onClick={next}
-        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50"
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 z-10"
       >
         <IoArrowForward size={24} />
-      </button>
+      </motion.button>
 
       <div className="flex justify-center gap-2 mt-6">
         {testimonials.map((_, index) => (
-          <button
+          <motion.button
             key={index}
-            onClick={() => setCurrentIndex(index)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              index === currentIndex ? 'w-8 bg-[#2E7D32]' : 'bg-gray-300'
+            onClick={() => {
+              setDirection(index > currentIndex ? 1 : -1)
+              setCurrentIndex(index)
+            }}
+            className={`rounded-full transition-all ${
+              index === currentIndex ? 'w-8 h-2 bg-green-600' : 'w-2 h-2 bg-gray-300'
             }`}
+            whileHover={{ scale: 1.2 }}
           />
         ))}
       </div>
@@ -434,21 +828,42 @@ const TestimonialSlider = ({ testimonials }) => {
 
 // ==================== BLOG CARD ====================
 const BlogCard = ({ post, index }) => {
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
     <motion.article
       variants={fadeInUp}
       whileHover={{ y: -10 }}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
       className="bg-white rounded-xl shadow-lg overflow-hidden group"
     >
       <div className="relative h-48 overflow-hidden">
-        <img 
-          src={post.image} 
+        <motion.img 
+          src={post.image || fallbackBlogImage} 
           alt={post.title}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          className="w-full h-full object-cover"
+          animate={{ scale: isHovered ? 1.1 : 1 }}
+          transition={{ duration: 0.4 }}
         />
-        <div className="absolute top-4 left-4 bg-[#2E7D32] text-white px-3 py-1 rounded-full text-sm">
+        <motion.div 
+          className="absolute top-4 left-4 bg-green-600 text-white px-3 py-1 rounded-full text-sm font-semibold"
+          whileHover={{ scale: 1.1 }}
+        >
           {post.category}
-        </div>
+        </motion.div>
+        <motion.div
+          className="absolute inset-0 bg-black/40 flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: isHovered ? 1 : 0 }}
+        >
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            className="bg-white p-3 rounded-full"
+          >
+            <IoSearch className="text-gray-800" />
+          </motion.div>
+        </motion.div>
       </div>
       <div className="p-6">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
@@ -459,12 +874,17 @@ const BlogCard = ({ post, index }) => {
         </div>
         <h3 className="text-xl font-bold text-gray-800 mb-2 line-clamp-2">{post.title}</h3>
         <p className="text-gray-600 mb-4 line-clamp-2">{post.excerpt}</p>
-        <Link 
-          to={`/blog/${post.id}`}
-          className="inline-flex items-center gap-2 text-[#2E7D32] font-semibold hover:gap-3 transition-all"
+        <motion.div
+          whileHover={{ x: 10 }}
+          transition={{ type: "spring", stiffness: 400 }}
         >
-          Read More <IoArrowForward />
-        </Link>
+          <Link 
+            to={`/blog/${post.slug || post.id}`}
+            className="inline-flex items-center gap-2 text-green-600 font-semibold hover:gap-3 transition-all"
+          >
+            Read More <IoArrowForward />
+          </Link>
+        </motion.div>
       </div>
     </motion.article>
   )
@@ -480,8 +900,14 @@ const StatsSection = () => {
   ]
 
   return (
-    <section className="py-16 bg-gradient-to-r from-[#2E7D32] to-[#81C784] text-white">
-      <div className="container mx-auto px-4">
+    <section className="py-20 bg-gradient-to-r from-green-700 via-green-600 to-green-500 text-white relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full transform -translate-x-32 -translate-y-32"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full transform translate-x-48 translate-y-48"></div>
+      </div>
+
+      <div className="container mx-auto px-4 relative z-10">
         <motion.div
           variants={staggerContainer}
           initial="hidden"
@@ -493,11 +919,16 @@ const StatsSection = () => {
             <motion.div
               key={index}
               variants={scaleIn}
+              whileHover={{ scale: 1.05 }}
               className="text-center"
             >
-              <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <motion.div 
+                className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4"
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.6 }}
+              >
                 <stat.icon className="text-4xl" />
-              </div>
+              </motion.div>
               <div className="text-4xl font-bold mb-2">
                 <Counter end={stat.value} suffix={stat.suffix} />
               </div>
@@ -522,20 +953,32 @@ const PartnersSection = () => {
   ]
 
   return (
-    <section className="py-16 bg-white">
+    <section className="py-20 bg-white">
       <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">Our Partners & Certifications</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 items-center">
+        <AnimatedSection direction="up">
+          <h2 className="text-4xl font-bold text-center text-gray-800 mb-4">Our Partners & Certifications</h2>
+          <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+            Trusted by leading agricultural organizations
+          </p>
+        </AnimatedSection>
+
+        <motion.div 
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 items-center"
+        >
           {partners.map((partner, index) => (
             <motion.div
               key={index}
+              variants={scaleIn}
               whileHover={{ scale: 1.1 }}
-              className="opacity-50 hover:opacity-100 transition grayscale hover:grayscale-0"
+              className="opacity-50 hover:opacity-100 transition grayscale hover:grayscale-0 cursor-pointer"
             >
               <img src={partner.logo} alt={partner.name} className="w-full h-auto" />
             </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   )
@@ -544,47 +987,64 @@ const PartnersSection = () => {
 // ==================== FEATURES GRID ====================
 const FeaturesGrid = () => {
   const features = [
-    { icon: IoShield, title: 'Quality Assured', desc: 'All products tested and certified' },
-    { icon: IoRocket, title: 'Fast Delivery', desc: 'Delivery within 3-5 days' },
-    { icon: IoPeople, title: 'Expert Support', desc: '24/7 farmer assistance' },
-    { icon: IoCash, title: 'Best Prices', desc: 'Direct from manufacturers' },
-    { icon: IoEarth, title: 'Sustainable', desc: 'Eco-friendly farming' },
-    { icon: IoWifi, title: 'Smart Farming', desc: 'IoT enabled solutions' },
-    { icon: IoHardwareChip, title: 'Modern Tech', desc: 'Latest agricultural tech' },
-    { icon: IoNutrition, title: 'Organic Options', desc: '100% organic products' }
+    { icon: IoShield, title: 'Quality Assured', desc: 'All products tested and certified', color: '#2E7D32' },
+    { icon: IoRocket, title: 'Fast Delivery', desc: 'Delivery within 3-5 days', color: '#FBC02D' },
+    { icon: IoPeople, title: 'Expert Support', desc: '24/7 farmer assistance', color: '#0288D1' },
+    { icon: IoCash, title: 'Best Prices', desc: 'Direct from manufacturers', color: '#81C784' },
+    { icon: IoEarth, title: 'Sustainable', desc: 'Eco-friendly farming', color: '#2E7D32' },
+    { icon: IoWifi, title: 'Smart Farming', desc: 'IoT enabled solutions', color: '#FBC02D' },
+    { icon: IoHardwareChip, title: 'Modern Tech', desc: 'Latest agricultural tech', color: '#0288D1' },
+    { icon: IoNutrition, title: 'Organic Options', desc: '100% organic products', color: '#81C784' }
   ]
 
   return (
-    <section className="py-16 bg-gray-50">
-      <div className="container mx-auto px-4">
-        <motion.h2 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          className="text-4xl font-bold text-center text-gray-800 mb-4"
-        >
-          Why Farmers Love Us
-        </motion.h2>
-        <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
-          We provide end-to-end solutions for modern farming needs
-        </p>
+    <section className="py-20 bg-gray-50 relative overflow-hidden">
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-green-600 rounded-full transform -translate-x-32 -translate-y-32"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-green-600 rounded-full transform translate-x-48 translate-y-48"></div>
+      </div>
+
+      <div className="container mx-auto px-4 relative z-10">
+        <AnimatedSection direction="up">
+          <h2 className="text-4xl font-bold text-center text-gray-800 mb-4">
+            Why Farmers Love Us
+          </h2>
+          <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto text-lg">
+            We provide end-to-end solutions for modern farming needs
+          </p>
+        </AnimatedSection>
 
         <motion.div 
           variants={staggerContainer}
           initial="hidden"
           whileInView="visible"
+          viewport={{ once: true }}
           className="grid grid-cols-2 md:grid-cols-4 gap-6"
         >
           {features.map((feature, index) => (
             <motion.div
               key={index}
               variants={fadeInUp}
-              whileHover={{ y: -5 }}
-              className="bg-white p-6 rounded-xl shadow-lg text-center group"
+              whileHover={{ y: -10, scale: 1.02 }}
+              className="bg-white p-6 rounded-xl shadow-lg text-center group cursor-pointer"
             >
-              <div className="w-16 h-16 bg-[#2E7D32]/10 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#2E7D32] transition-colors">
-                <feature.icon className="text-2xl text-[#2E7D32] group-hover:text-white transition-colors" />
-              </div>
-              <h3 className="font-bold text-gray-800 mb-2">{feature.title}</h3>
+              <motion.div 
+                className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors relative overflow-hidden"
+                style={{ backgroundColor: `${feature.color}15` }}
+                whileHover={{ scale: 1.1 }}
+              >
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100"
+                  style={{ background: `linear-gradient(135deg, ${feature.color} 0%, ${feature.color}80 100%)` }}
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                <feature.icon 
+                  className="text-3xl relative z-10 transition-colors group-hover:text-white" 
+                  style={{ color: feature.color }}
+                />
+              </motion.div>
+              <h3 className="font-bold text-gray-800 mb-2 text-lg">{feature.title}</h3>
               <p className="text-sm text-gray-600">{feature.desc}</p>
             </motion.div>
           ))}
@@ -603,7 +1063,8 @@ const SuccessStories = () => {
       before: 'Traditional farming with low yield',
       after: 'Doubled yield with our solutions',
       image: 'https://images.unsplash.com/photo-1621905252507-bf92d5afff8f?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
-      increase: '+120%'
+      increase: '+120%',
+      color: '#2E7D32'
     },
     {
       farmer: 'Lakshmi Devi',
@@ -611,7 +1072,8 @@ const SuccessStories = () => {
       before: 'High electricity costs',
       after: 'Solar pump saved 80% costs',
       image: 'https://images.unsplash.com/photo-1589156229687-496a31ad1d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
-      increase: '₹50K/year'
+      increase: '₹50K/year',
+      color: '#FBC02D'
     },
     {
       farmer: 'Gurpreet Singh',
@@ -619,55 +1081,84 @@ const SuccessStories = () => {
       before: 'Chemical farming',
       after: 'Organic certification achieved',
       image: 'https://images.unsplash.com/photo-1595152772835-219674b2a8a6?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
-      increase: '+200%'
+      increase: '+200%',
+      color: '#0288D1'
     }
   ]
 
   return (
-    <section className="py-16 bg-white">
+    <section className="py-20 bg-white">
       <div className="container mx-auto px-4">
-        <h2 className="text-4xl font-bold text-center text-gray-800 mb-4">Success Stories</h2>
-        <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
-          Real farmers, real results with AgroMart
-        </p>
+        <AnimatedSection direction="up">
+          <h2 className="text-4xl font-bold text-center text-gray-800 mb-4">Success Stories</h2>
+          <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto text-lg">
+            Real farmers, real results with AgroMart
+          </p>
+        </AnimatedSection>
 
         <div className="grid md:grid-cols-3 gap-8">
           {stories.map((story, index) => (
             <motion.div
               key={index}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.2 }}
               whileHover={{ y: -10 }}
+              viewport={{ once: true }}
               className="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl p-6 relative overflow-hidden group"
             >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#2E7D32]/10 rounded-bl-full"></div>
+              <motion.div 
+                className="absolute top-0 right-0 w-32 h-32 rounded-bl-full"
+                style={{ background: `linear-gradient(135deg, ${story.color} 0%, ${story.color}80 100%)` }}
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 3, repeat: Infinity }}
+              />
               
-              <div className="flex items-center gap-4 mb-4">
-                <img 
-                  src={story.image} 
-                  alt={story.farmer}
-                  className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-lg"
-                />
+              <div className="flex items-center gap-4 mb-4 relative z-10">
+                <motion.div 
+                  className="w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg"
+                  whileHover={{ scale: 1.1, rotate: 10 }}
+                >
+                  <img 
+                    src={story.image} 
+                    alt={story.farmer}
+                    className="w-full h-full object-cover"
+                  />
+                </motion.div>
                 <div>
                   <h3 className="font-bold text-lg">{story.farmer}</h3>
                   <p className="text-sm text-gray-600">{story.location}</p>
                 </div>
               </div>
 
-              <div className="space-y-3 mb-4">
-                <div className="bg-white/50 p-3 rounded-lg">
+              <div className="space-y-3 mb-4 relative z-10">
+                <motion.div 
+                  className="bg-white/50 p-3 rounded-lg"
+                  whileHover={{ x: 5 }}
+                >
                   <p className="text-sm text-gray-500">Before</p>
                   <p className="font-medium">{story.before}</p>
-                </div>
-                <div className="bg-white/50 p-3 rounded-lg">
+                </motion.div>
+                <motion.div 
+                  className="bg-white/50 p-3 rounded-lg"
+                  whileHover={{ x: 5 }}
+                >
                   <p className="text-sm text-gray-500">After</p>
-                  <p className="font-medium text-[#2E7D32]">{story.after}</p>
-                </div>
+                  <p className="font-medium text-green-600">{story.after}</p>
+                </motion.div>
               </div>
 
-              <div className="text-center">
-                <span className="inline-block bg-[#2E7D32] text-white px-4 py-2 rounded-full font-bold">
+              <motion.div 
+                className="text-center relative z-10"
+                whileHover={{ scale: 1.05 }}
+              >
+                <span 
+                  className="inline-block text-white px-4 py-2 rounded-full font-bold"
+                  style={{ backgroundColor: story.color }}
+                >
                   {story.increase} Growth
                 </span>
-              </div>
+              </motion.div>
             </motion.div>
           ))}
         </div>
@@ -737,44 +1228,51 @@ const SolarSubsidyGuide = () => {
   ]
 
   return (
-    <section className="py-16 bg-gradient-to-br from-blue-50 to-green-50">
-      <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-12"
-        >
-          <span className="inline-block px-4 py-2 bg-yellow-500 text-white rounded-full text-sm font-semibold mb-4">
-            PM Surya Ghar: Muft Bijli Yojana
-          </span>
-          <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>
-            Solar Subsidy Guide: City by City Breakdown
-          </h2>
-          <p className="text-gray-600 text-lg max-w-3xl mx-auto">
-            Launched in February 2024, this flagship scheme aims to install rooftop solar in 1 crore households by 2027, adding 30 GW capacity.
-          </p>
-        </motion.div>
+    <section className="py-20 bg-gradient-to-br from-blue-50 to-green-50 relative overflow-hidden">
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-yellow-400 rounded-full transform -translate-x-32 -translate-y-32"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-green-600 rounded-full transform translate-x-48 translate-y-48"></div>
+      </div>
+
+      <div className="container mx-auto px-4 relative z-10">
+        <AnimatedSection direction="up">
+          <div className="text-center mb-12">
+            <motion.span 
+              className="inline-block px-4 py-2 bg-yellow-500 text-white rounded-full text-sm font-semibold mb-4"
+              whileHover={{ scale: 1.05 }}
+            >
+              PM Surya Ghar: Muft Bijli Yojana
+            </motion.span>
+            <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>
+              Solar Subsidy Guide: City by City Breakdown
+            </h2>
+            <p className="text-gray-600 text-lg max-w-3xl mx-auto">
+              Launched in February 2024, this flagship scheme aims to install rooftop solar in 1 crore households by 2027, adding 30 GW capacity.
+            </p>
+          </div>
+        </AnimatedSection>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - National Scheme */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="lg:col-span-1 space-y-6"
-          >
-            <div className="bg-white rounded-2xl shadow-xl p-6">
+          <AnimatedSection direction="left" className="lg:col-span-1 space-y-6">
+            <motion.div 
+              className="bg-white rounded-2xl shadow-xl p-6"
+              whileHover={{ y: -5 }}
+            >
               <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <IoHome className="text-green-600" /> Central Financial Assistance
               </h3>
               <div className="space-y-4">
                 {subsidyTable.map((item, index) => (
-                  <div key={index} className="border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                  <motion.div 
+                    key={index} 
+                    className="border-b border-gray-100 last:border-0 pb-3 last:pb-0"
+                    whileHover={{ x: 5 }}
+                  >
                     <p className="text-sm text-gray-500">Monthly Consumption: {item.consumption}</p>
                     <p className="font-semibold">System Size: {item.size}</p>
                     <p className="text-green-600 font-bold">Subsidy: {item.subsidy}</p>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
               <div className="mt-4 p-3 bg-blue-50 rounded-lg">
@@ -787,21 +1285,26 @@ const SolarSubsidyGuide = () => {
                   <span className="font-bold">Impact:</span> Over 20.85 lakh rooftop solar systems installed, benefiting 26+ lakh households
                 </p>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="bg-white rounded-2xl shadow-xl p-6">
+            <motion.div 
+              className="bg-white rounded-2xl shadow-xl p-6"
+              whileHover={{ y: -5 }}
+            >
               <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <IoBusiness className="text-green-600" /> How to Get Started
               </h3>
               <div className="space-y-3">
-                <a 
+                <motion.a 
                   href="https://www.pmsuryaghar.gov.in" 
                   target="_blank" 
                   rel="noopener noreferrer"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   className="block p-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition text-center font-semibold"
                 >
                   Visit National Portal →
-                </a>
+                </motion.a>
                 <p className="text-sm text-gray-600 text-center">
                   Register, apply for subsidies, and select vendors at www.pmsuryaghar.gov.in
                 </p>
@@ -809,26 +1312,26 @@ const SolarSubsidyGuide = () => {
                   Check with your local DISCOM for net metering approvals
                 </p>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </AnimatedSection>
 
           {/* Middle Column - City Examples */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="lg:col-span-1"
-          >
-            <div className="bg-white rounded-2xl shadow-xl p-6 h-full">
+          <AnimatedSection direction="up" className="lg:col-span-1">
+            <motion.div 
+              className="bg-white rounded-2xl shadow-xl p-6 h-full"
+              whileHover={{ y: -5 }}
+            >
               <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <IoLocation className="text-green-600" /> City-Wise Success Stories
               </h3>
               
               <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
                 {cities.map(city => (
-                  <button
+                  <motion.button
                     key={city.id}
                     onClick={() => setSelectedCity(city.id)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className={`px-4 py-2 rounded-lg whitespace-nowrap transition ${
                       selectedCity === city.id
                         ? 'bg-green-600 text-white'
@@ -836,7 +1339,7 @@ const SolarSubsidyGuide = () => {
                     }`}
                   >
                     <city.icon className="inline mr-1" /> {city.name}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
 
@@ -851,28 +1354,41 @@ const SolarSubsidyGuide = () => {
                   {selectedCity === 'pune' && (
                     <>
                       <div className="grid grid-cols-3 gap-2 mb-4">
-                        <div className="bg-blue-50 p-3 rounded-lg text-center">
+                        <motion.div 
+                          className="bg-blue-50 p-3 rounded-lg text-center"
+                          whileHover={{ scale: 1.05 }}
+                        >
                           <p className="text-2xl font-bold text-blue-600">{cityData.pune.installations}</p>
                           <p className="text-xs text-gray-600">Installations</p>
-                        </div>
-                        <div className="bg-green-50 p-3 rounded-lg text-center">
+                        </motion.div>
+                        <motion.div 
+                          className="bg-green-50 p-3 rounded-lg text-center"
+                          whileHover={{ scale: 1.05 }}
+                        >
                           <p className="text-2xl font-bold text-green-600">{cityData.pune.capacity}</p>
                           <p className="text-xs text-gray-600">Capacity</p>
-                        </div>
-                        <div className="bg-yellow-50 p-3 rounded-lg text-center">
+                        </motion.div>
+                        <motion.div 
+                          className="bg-yellow-50 p-3 rounded-lg text-center"
+                          whileHover={{ scale: 1.05 }}
+                        >
                           <p className="text-2xl font-bold text-yellow-600">{cityData.pune.subsidy}</p>
                           <p className="text-xs text-gray-600">Subsidy</p>
-                        </div>
+                        </motion.div>
                       </div>
                       {cityData.pune.details.map((area, idx) => (
-                        <div key={idx} className="p-3 bg-gray-50 rounded-lg">
+                        <motion.div 
+                          key={idx} 
+                          className="p-3 bg-gray-50 rounded-lg"
+                          whileHover={{ x: 5 }}
+                        >
                           <p className="font-semibold">{area.area}</p>
                           <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
                             <span>{area.projects} projects</span>
                             <span>{area.capacity}</span>
                             <span className="text-green-600">{area.subsidy}</span>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
                     </>
                   )}
@@ -880,14 +1396,20 @@ const SolarSubsidyGuide = () => {
                   {selectedCity === 'raipur' && (
                     <div className="text-center p-4">
                       <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="bg-green-50 p-4 rounded-lg">
+                        <motion.div 
+                          className="bg-green-50 p-4 rounded-lg"
+                          whileHover={{ scale: 1.05 }}
+                        >
                           <p className="text-sm text-gray-600">Monthly Savings</p>
                           <p className="text-2xl font-bold text-green-600">{cityData.raipur.savings}</p>
-                        </div>
-                        <div className="bg-blue-50 p-4 rounded-lg">
+                        </motion.div>
+                        <motion.div 
+                          className="bg-blue-50 p-4 rounded-lg"
+                          whileHover={{ scale: 1.05 }}
+                        >
                           <p className="text-sm text-gray-600">Payback Period</p>
                           <p className="text-2xl font-bold text-blue-600">{cityData.raipur.payback}</p>
-                        </div>
+                        </motion.div>
                       </div>
                       <p className="text-gray-600">{cityData.raipur.description}</p>
                       <p className="text-sm text-gray-500 mt-4">
@@ -899,19 +1421,29 @@ const SolarSubsidyGuide = () => {
                   {selectedCity === 'delhi' && (
                     <div className="space-y-3">
                       <p className="font-semibold text-green-600">{cityData.delhi.policy}</p>
-                      <div className="bg-blue-50 p-3 rounded-lg">
+                      <motion.div 
+                        className="bg-blue-50 p-3 rounded-lg"
+                        whileHover={{ x: 5 }}
+                      >
                         <p className="text-sm text-gray-600">Net Metering</p>
                         <p className="font-bold">{cityData.delhi.netMetering}</p>
-                      </div>
-                      <div className="bg-green-50 p-3 rounded-lg">
+                      </motion.div>
+                      <motion.div 
+                        className="bg-green-50 p-3 rounded-lg"
+                        whileHover={{ x: 5 }}
+                      >
                         <p className="text-sm text-gray-600">Compensation</p>
                         <p className="font-bold">{cityData.delhi.compensation}</p>
-                      </div>
+                      </motion.div>
                       {cityData.delhi.features.map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
+                        <motion.div 
+                          key={idx} 
+                          className="flex items-center gap-2"
+                          whileHover={{ x: 5 }}
+                        >
                           <IoCheckmarkCircle className="text-green-600" />
                           <span className="text-sm">{feature}</span>
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   )}
@@ -919,45 +1451,55 @@ const SolarSubsidyGuide = () => {
                   {selectedCity === 'ahmedabad' && (
                     <div className="space-y-3">
                       <p className="font-semibold text-green-600">{cityData.ahmedabad.policy}</p>
-                      <div className="bg-blue-50 p-3 rounded-lg">
+                      <motion.div 
+                        className="bg-blue-50 p-3 rounded-lg"
+                        whileHover={{ x: 5 }}
+                      >
                         <p className="text-sm text-gray-600">Net Metering</p>
                         <p className="font-bold">{cityData.ahmedabad.netMetering}</p>
-                      </div>
-                      <div className="bg-green-50 p-3 rounded-lg">
+                      </motion.div>
+                      <motion.div 
+                        className="bg-green-50 p-3 rounded-lg"
+                        whileHover={{ x: 5 }}
+                      >
                         <p className="text-sm text-gray-600">Rate</p>
                         <p className="font-bold">{cityData.ahmedabad.rate}</p>
-                      </div>
+                      </motion.div>
                       {cityData.ahmedabad.features.map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
+                        <motion.div 
+                          key={idx} 
+                          className="flex items-center gap-2"
+                          whileHover={{ x: 5 }}
+                        >
                           <IoCheckmarkCircle className="text-green-600" />
                           <span className="text-sm">{feature}</span>
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   )}
                 </motion.div>
               </AnimatePresence>
-            </div>
-          </motion.div>
+            </motion.div>
+          </AnimatedSection>
 
           {/* Right Column - State Policies */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="lg:col-span-1"
-          >
-            <div className="bg-white rounded-2xl shadow-xl p-6 h-full">
+          <AnimatedSection direction="right" className="lg:col-span-1">
+            <motion.div 
+              className="bg-white rounded-2xl shadow-xl p-6 h-full"
+              whileHover={{ y: -5 }}
+            >
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                   <IoEarth className="text-green-600" /> State-Wide Policies
                 </h3>
-                <button
+                <motion.button
                   onClick={() => setShowStateTable(!showStateTable)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   className="text-sm text-green-600 hover:text-green-700 font-semibold"
                 >
                   {showStateTable ? 'Show Less' : 'View All'}
-                </button>
+                </motion.button>
               </div>
 
               <div className="overflow-x-auto">
@@ -971,11 +1513,15 @@ const SolarSubsidyGuide = () => {
                   </thead>
                   <tbody>
                     {(showStateTable ? statePolicies : statePolicies.slice(0, 4)).map((policy, idx) => (
-                      <tr key={idx} className="border-b hover:bg-gray-50">
+                      <motion.tr 
+                        key={idx} 
+                        className="border-b hover:bg-gray-50 cursor-pointer"
+                        whileHover={{ x: 5 }}
+                      >
                         <td className="p-2 font-medium">{policy.state}</td>
                         <td className="p-2 text-xs">{policy.netMetering}</td>
                         <td className="p-2 text-xs text-green-600">{policy.rate}</td>
-                      </tr>
+                      </motion.tr>
                     ))}
                   </tbody>
                 </table>
@@ -992,25 +1538,25 @@ const SolarSubsidyGuide = () => {
                   <span className="font-bold">Note:</span> Installation data and local incentives change constantly. Visit the national portal or contact your local DISCOM for the most up-to-date information.
                 </p>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </AnimatedSection>
         </div>
 
         {/* Bottom CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mt-8"
-        >
-          <Link
-            to="/subsidy"
-            className="inline-flex items-center gap-2 bg-green-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-green-700 transition shadow-lg hover:shadow-xl"
+        <AnimatedSection direction="up" className="text-center mt-8">
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <IoCalculator /> Calculate Your Subsidy
-            <IoArrowForward />
-          </Link>
-        </motion.div>
+            <Link
+              to="/subsidy"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-500 text-white px-8 py-4 rounded-xl font-semibold hover:from-green-700 hover:to-green-600 transition shadow-lg hover:shadow-xl"
+            >
+              <IoCalculator /> Calculate Your Subsidy
+              <IoArrowForward />
+            </Link>
+          </motion.div>
+        </AnimatedSection>
       </div>
     </section>
   )
@@ -1040,9 +1586,12 @@ const FAQSection = () => {
   ]
 
   return (
-    <section className="py-16 bg-gray-50">
+    <section className="py-20 bg-gray-50">
       <div className="container mx-auto px-4 max-w-3xl">
-        <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">Frequently Asked Questions</h2>
+        <AnimatedSection direction="up">
+          <h2 className="text-4xl font-bold text-center text-gray-800 mb-4">Frequently Asked Questions</h2>
+          <p className="text-center text-gray-600 mb-12">Got questions? We've got answers!</p>
+        </AnimatedSection>
         
         <div className="space-y-4">
           {faqs.map((faq, index) => (
@@ -1053,15 +1602,19 @@ const FAQSection = () => {
               transition={{ delay: index * 0.1 }}
               className="bg-white rounded-xl shadow-md overflow-hidden"
             >
-              <button
+              <motion.button
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
                 className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-50"
+                whileHover={{ x: 5 }}
               >
                 <span className="font-semibold text-gray-800">{faq.question}</span>
-                <span className={`transform transition-transform ${openIndex === index ? 'rotate-180' : ''}`}>
+                <motion.span 
+                  animate={{ rotate: openIndex === index ? 180 : 0 }}
+                  transition={{ duration: 0.3 }}
+                >
                   ▼
-                </span>
-              </button>
+                </motion.span>
+              </motion.button>
               
               <AnimatePresence>
                 {openIndex === index && (
@@ -1087,56 +1640,73 @@ const FAQSection = () => {
 const NewsletterSection = () => {
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    setSubscribed(true)
-    setTimeout(() => setSubscribed(false), 3000)
+    setSubmitting(true)
+    try {
+      await API.post('/newsletter/subscribe', { email })
+      setSubscribed(true)
+      setEmail('')
+      setTimeout(() => setSubscribed(false), 3000)
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Subscription failed')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
-    <section className="py-20 bg-gradient-to-r from-[#2E7D32] to-[#81C784]">
-      <div className="container mx-auto px-4 text-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          className="max-w-2xl mx-auto"
-        >
-          <h2 className="text-4xl font-bold text-white mb-4">Stay Updated</h2>
-          <p className="text-xl text-green-50 mb-8">
-            Get latest farming tips, subsidy news, and product updates
-          </p>
+    <section className="py-20 bg-gradient-to-r from-green-700 via-green-600 to-green-500 relative overflow-hidden">
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full transform -translate-x-32 -translate-y-32"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full transform translate-x-48 translate-y-48"></div>
+      </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="flex-1 px-6 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"
-              required
-            />
-            <button
-              type="submit"
-              className="bg-white text-[#2E7D32] px-8 py-3 rounded-lg font-semibold hover:bg-green-50 transition"
-            >
-              Subscribe
-            </button>
-          </form>
+      <div className="container mx-auto px-4 text-center relative z-10">
+        <AnimatedSection direction="up">
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-4xl font-bold text-white mb-4">Stay Updated</h2>
+            <p className="text-xl text-green-50 mb-8">
+              Get latest farming tips, subsidy news, and product updates
+            </p>
 
-          <AnimatePresence>
-            {subscribed && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="mt-4 bg-white/20 text-white px-4 py-2 rounded-lg"
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+              <motion.input
+                whileFocus={{ scale: 1.02 }}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="flex-1 px-6 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"
+                required
+              />
+              <motion.button
+                type="submit"
+                disabled={submitting}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="bg-white text-green-600 px-8 py-3 rounded-lg font-semibold hover:bg-green-50 transition shadow-lg disabled:opacity-70"
               >
-                ✓ Thanks for subscribing!
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+                {submitting ? 'Subscribing...' : 'Subscribe'}
+              </motion.button>
+            </form>
+
+            <AnimatePresence>
+              {subscribed && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mt-4 bg-white/20 text-white px-4 py-2 rounded-lg"
+                >
+                  ✓ Thanks for subscribing!
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </AnimatedSection>
       </div>
     </section>
   )
@@ -1144,6 +1714,8 @@ const NewsletterSection = () => {
 
 // ==================== MAIN HOME COMPONENT ====================
 export default function Home() {
+  const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
   const [featuredProducts, setFeaturedProducts] = useState([])
   const [blogPosts, setBlogPosts] = useState([])
   const [categories, setCategories] = useState([])
@@ -1186,6 +1758,92 @@ export default function Home() {
     }
   ]
 
+  // Sample products
+  const sampleProducts = [
+    {
+      id: 1,
+      name: 'Organic Wheat Seeds',
+      price: 499,
+      mrp: 599,
+      rating: 4.5,
+      reviews: 128,
+      discount: 20,
+      isNew: true,
+      category: 'seeds',
+      image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+    },
+    {
+      id: 2,
+      name: 'NPK Fertilizer 50kg',
+      price: 1299,
+      mrp: 1599,
+      rating: 4,
+      reviews: 89,
+      discount: 15,
+      isNew: false,
+      category: 'fertilizers',
+      image: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+    },
+    {
+      id: 3,
+      name: 'Solar Water Pump 5HP',
+      price: 45000,
+      mrp: 90000,
+      rating: 5,
+      reviews: 56,
+      discount: 50,
+      isNew: true,
+      category: 'solar',
+      image: 'https://images.unsplash.com/photo-1509395176047-4a66953fd231?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+    },
+    {
+      id: 4,
+      name: 'Organic Pesticide',
+      price: 299,
+      mrp: 399,
+      rating: 4,
+      reviews: 234,
+      discount: 25,
+      isNew: false,
+      category: 'pesticides',
+      image: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+    },
+    {
+      id: 5,
+      name: 'Drip Irrigation Kit',
+      price: 2499,
+      mrp: 2999,
+      rating: 4.5,
+      reviews: 167,
+      discount: 10,
+      isNew: true,
+      category: 'irrigation',
+      image: 'https://images.unsplash.com/photo-1592982537447-6f2a6a0c7e5b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+    },
+    {
+      id: 6,
+      name: 'Greenhouse Film',
+      price: 5999,
+      mrp: 7999,
+      rating: 4,
+      reviews: 45,
+      discount: 25,
+      isNew: false,
+      category: 'greenhouse',
+      image: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+    }
+  ]
+
+  // Sample categories
+  const sampleCategories = [
+    { id: 'seeds', name: 'Seeds' },
+    { id: 'fertilizers', name: 'Fertilizers' },
+    { id: 'solar', name: 'Solar' },
+    { id: 'pesticides', name: 'Pesticides' },
+    { id: 'irrigation', name: 'Irrigation' },
+    { id: 'greenhouse', name: 'Greenhouse' }
+  ]
+
   // Marquee items
   const marqueeItems = [
     { icon: IoLeaf, text: 'Organic Certified Products' },
@@ -1225,18 +1883,36 @@ export default function Home() {
     const fetchHomeData = async () => {
       try {
         setLoading(true)
-        // Simulate API calls with sample data
-        setTimeout(() => {
-          setFeaturedProducts([])
-          setBlogPosts(sampleBlogs)
-          setCategories([])
-          setLoading(false)
-        }, 1000)
+        const [productsRes, latestProductsRes, blogsRes, categoriesRes] = await Promise.allSettled([
+          getFeaturedProducts(6),
+          getAllProducts(1, 6, { sortBy: 'newest' }),
+          getAllBlogPosts({ page: 1, limit: 3 }),
+          getAllCategories(),
+        ])
+
+        const featured = productsRes.status === 'fulfilled'
+          ? (Array.isArray(productsRes.value) ? productsRes.value : productsRes.value?.products || productsRes.value?.data || [])
+          : []
+        const latest = latestProductsRes.status === 'fulfilled'
+          ? (latestProductsRes.value?.products || latestProductsRes.value?.data || [])
+          : []
+        const products = (featured.length > 0 ? featured : latest).map(normalizeProduct)
+        const blogs = blogsRes.status === 'fulfilled'
+          ? (blogsRes.value?.data || blogsRes.value?.posts || []).map(normalizeBlogPost)
+          : []
+        const apiCategories = categoriesRes.status === 'fulfilled'
+          ? (categoriesRes.value?.data || categoriesRes.value?.categories || []).map(normalizeCategory)
+          : []
+
+        setFeaturedProducts(products.length > 0 ? products : sampleProducts.map(normalizeProduct))
+        setBlogPosts(blogs.length > 0 ? blogs : sampleBlogs.map(normalizeBlogPost))
+        setCategories(apiCategories.length > 0 ? apiCategories : sampleCategories)
       } catch (error) {
         console.error('Error fetching home data:', error)
-        setFeaturedProducts([])
-        setBlogPosts(sampleBlogs)
-        setCategories([])
+        setFeaturedProducts(sampleProducts.map(normalizeProduct))
+        setBlogPosts(sampleBlogs.map(normalizeBlogPost))
+        setCategories(sampleCategories)
+      } finally {
         setLoading(false)
       }
     }
@@ -1254,35 +1930,163 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const requireLogin = (nextPath) => {
+    if (isAuthenticated) return false
+    toast.error('Please login to continue')
+    navigate('/login', { state: { from: nextPath || '/' } })
+    return true
+  }
+
+  const handleAddToCart = async (product) => {
+    if (requireLogin(product.productUrl)) return
+    try {
+      await API.post('/cart', { productId: product.id, quantity: 1 })
+      toast.success(`${product.name} added to cart`)
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to add product to cart')
+    }
+  }
+
+  const handleToggleWishlist = async (product) => {
+    if (requireLogin(product.productUrl)) return false
+    try {
+      await API.post(`/wishlist/${product.id}`)
+      toast.success('Wishlist updated')
+      return true
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update wishlist')
+      return false
+    }
+  }
+
+  const handleShareProduct = async (product) => {
+    const url = `${window.location.origin}${product.productUrl}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: product.name, text: product.description || 'Check this product on AgroMart', url })
+      } else {
+        await navigator.clipboard.writeText(url)
+        toast.success('Product link copied')
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        toast.error('Unable to share product')
+      }
+    }
+  }
+
+  const handleQuickView = (product) => {
+    navigate(product.productUrl)
+  }
+
   return (
-    <div className="min-h-screen bg-[#F1F8E9]" style={{ fontFamily: fontFamily.body }}>
+    <div className="min-h-screen bg-gray-50" style={{ fontFamily: fontFamily.body }}>
       {/* Marquee */}
       <Marquee items={marqueeItems} speed={25} />
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-[#2E7D32] via-[#81C784] to-[#FBC02D] min-h-[600px] flex items-center overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
+      <section className="relative bg-gradient-to-br from-green-700 via-green-600 to-yellow-500 min-h-[700px] flex items-center overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <motion.div
+            className="absolute top-20 left-20 w-64 h-64 bg-white/10 rounded-full"
+            animate={{
+              scale: [1, 1.2, 1],
+              x: [0, 50, 0],
+              y: [0, 30, 0]
+            }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+          <motion.div
+            className="absolute bottom-20 right-20 w-96 h-96 bg-white/10 rounded-full"
+            animate={{
+              scale: [1, 1.3, 1],
+              x: [0, -50, 0],
+              y: [0, -30, 0]
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+          <motion.div
+            className="absolute top-1/2 left-1/3 w-48 h-48 bg-white/10 rounded-full"
+            animate={{
+              scale: [1, 1.1, 1],
+              rotate: [0, 90, 0]
+            }}
+            transition={{
+              duration: 6,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+        </div>
+
+        {/* Floating Images */}
+        <motion.div
+          className="absolute top-10 left-10 w-24 h-24 rounded-full overflow-hidden shadow-2xl"
+          animate={{
+            y: [0, -20, 0],
+            rotate: [0, 10, 0]
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        >
           <img 
             src="https://images.unsplash.com/photo-1500651230702-0e2d8a49d4ad?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" 
             alt="Wheat field"
-            className="absolute top-10 left-10 w-24 h-24 rounded-full object-cover"
+            className="w-full h-full object-cover"
           />
+        </motion.div>
+
+        <motion.div
+          className="absolute bottom-20 right-20 w-32 h-32 rounded-full overflow-hidden shadow-2xl"
+          animate={{
+            y: [0, 20, 0],
+            rotate: [0, -10, 0]
+          }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1
+          }}
+        >
           <img 
             src="https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" 
             alt="Solar panels"
-            className="absolute bottom-20 right-20 w-32 h-32 rounded-full object-cover"
+            className="w-full h-full object-cover"
           />
+        </motion.div>
+
+        <motion.div
+          className="absolute top-1/3 right-1/4 w-28 h-28 rounded-full overflow-hidden shadow-2xl"
+          animate={{
+            y: [0, -15, 0],
+            x: [0, 15, 0]
+          }}
+          transition={{
+            duration: 4.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.5
+          }}
+        >
           <img 
             src="https://images.unsplash.com/photo-1592982537447-6f2a6a0c7e5b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" 
             alt="Tractor"
-            className="absolute top-1/3 right-1/4 w-28 h-28 rounded-full object-cover"
+            className="w-full h-full object-cover"
           />
-          <img 
-            src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" 
-            alt="Sunflower field"
-            className="absolute bottom-10 left-1/3 w-36 h-36 rounded-full object-cover"
-          />
-        </div>
+        </motion.div>
 
         <div className="container mx-auto px-4 py-20 relative z-10">
           <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -1292,20 +2096,37 @@ export default function Home() {
               transition={{ duration: 0.8 }}
               className="text-white"
             >
-              <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight" style={{ fontFamily: fontFamily.heading }}>
+              <motion.h1 
+                className="text-5xl md:text-7xl font-bold mb-6 leading-tight" 
+                style={{ fontFamily: fontFamily.heading }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.6 }}
+              >
                 Empowering Farmers with Smart Agriculture & Solar Solutions
-              </h1>
-              <p className="text-xl text-green-50 mb-8 max-w-lg" style={{ fontFamily: fontFamily.body }}>
+              </motion.h1>
+              <motion.p 
+                className="text-xl text-green-50 mb-8 max-w-lg" 
+                style={{ fontFamily: fontFamily.body }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.6 }}
+              >
                 Quality seeds, fertilizers, solar pumps, and government subsidy support. 
                 Trusted by 10,000+ farmers across India.
-              </p>
+              </motion.p>
               
-              <div className="flex flex-wrap gap-4">
+              <motion.div 
+                className="flex flex-wrap gap-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6, duration: 0.6 }}
+              >
                 <Link to="/products">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="bg-white text-[#2E7D32] px-8 py-3 rounded-lg font-semibold hover:bg-green-50 shadow-lg flex items-center gap-2 text-lg"
+                    className="bg-white text-green-600 px-8 py-4 rounded-lg font-semibold hover:bg-green-50 shadow-xl flex items-center gap-2 text-lg"
                     style={{ fontFamily: fontFamily.heading }}
                   >
                     <IoLeaf /> Shop Agriculture Products
@@ -1315,28 +2136,35 @@ export default function Home() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="bg-[#FBC02D] text-gray-800 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-500 shadow-lg flex items-center gap-2 text-lg"
+                    className="bg-yellow-500 text-gray-800 px-8 py-4 rounded-lg font-semibold hover:bg-yellow-400 shadow-xl flex items-center gap-2 text-lg"
                     style={{ fontFamily: fontFamily.heading }}
                   >
                     <IoSunny /> Explore Solar Solutions
                   </motion.button>
                 </Link>
-              </div>
+              </motion.div>
 
-              <div className="grid grid-cols-3 gap-6 mt-12">
-                <div className="text-center">
-                  <div className="text-3xl font-bold">10K+</div>
-                  <div className="text-sm opacity-90">Happy Farmers</div>
-                </div>
-                <div className="text-center border-x border-white/20">
-                  <div className="text-3xl font-bold">500+</div>
-                  <div className="text-sm opacity-90">Products</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold">24/7</div>
-                  <div className="text-sm opacity-90">Support</div>
-                </div>
-              </div>
+              <motion.div 
+                className="grid grid-cols-3 gap-6 mt-12"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8, duration: 0.6 }}
+              >
+                {[
+                  { value: '10K+', label: 'Happy Farmers' },
+                  { value: '500+', label: 'Products' },
+                  { value: '24/7', label: 'Support' }
+                ].map((item, index) => (
+                  <motion.div 
+                    key={index} 
+                    className="text-center"
+                    whileHover={{ scale: 1.1 }}
+                  >
+                    <div className="text-3xl font-bold">{item.value}</div>
+                    <div className="text-sm opacity-90">{item.label}</div>
+                  </motion.div>
+                ))}
+              </motion.div>
             </motion.div>
 
             <motion.div
@@ -1345,17 +2173,32 @@ export default function Home() {
               transition={{ duration: 0.8 }}
               className="hidden md:block relative"
             >
-              <div className="absolute inset-0 bg-white/10 rounded-full blur-3xl"></div>
+              <motion.div 
+                className="absolute inset-0 bg-white/20 rounded-full blur-3xl"
+                animate={{
+                  scale: [1, 1.2, 1],
+                  opacity: [0.3, 0.5, 0.3]
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              />
               <div className="relative grid grid-cols-2 gap-4">
-                <img 
+                <motion.img 
                   src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" 
                   alt="Agriculture field"
-                  className="rounded-2xl shadow-2xl h-64 w-full object-cover transform hover:scale-105 transition-transform duration-500"
+                  className="rounded-2xl shadow-2xl h-64 w-full object-cover"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.3 }}
                 />
-                <img 
+                <motion.img 
                   src="https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" 
                   alt="Solar panels"
-                  className="rounded-2xl shadow-2xl h-64 w-full object-cover mt-8 transform hover:scale-105 transition-transform duration-500"
+                  className="rounded-2xl shadow-2xl h-64 w-full object-cover mt-8"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.3 }}
                 />
               </div>
             </motion.div>
@@ -1364,44 +2207,45 @@ export default function Home() {
       </section>
 
       {/* Quick Services Section */}
-      <section className="py-16">
+      <section className="py-20">
         <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>Quick Services</h2>
-            <p className="text-gray-600 text-lg max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
-              Everything you need for modern farming at your fingertips
-            </p>
-          </motion.div>
+          <AnimatedSection direction="up">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>Quick Services</h2>
+              <p className="text-gray-600 text-lg max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
+                Everything you need for modern farming at your fingertips
+              </p>
+            </div>
+          </AnimatedSection>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <CategoryCard 
               icon={IoLeaf}
               title="Buy Seeds"
               color="#2E7D32"
-              onClick={() => window.location.href = '/products?category=seeds'}
+              delay={0.1}
+              onClick={() => navigate('/products?category=seeds')}
             />
             <CategoryCard 
               icon={IoFlask}
               title="Fertilizers & Bio Waste"
               color="#FBC02D"
-              onClick={() => window.location.href = '/products?category=fertilizers'}
+              delay={0.2}
+              onClick={() => navigate('/products?category=fertilizers')}
             />
             <CategoryCard 
               icon={IoSunny}
               title="Solar Pump Installation"
               color="#0288D1"
-              onClick={() => window.location.href = '/solar-services'}
+              delay={0.3}
+              onClick={() => navigate('/solar-services')}
             />
             <CategoryCard 
               icon={IoGift}
               title="Government Subsidy Help"
               color="#81C784"
-              onClick={() => window.location.href = '/subsidy'}
+              delay={0.4}
+              onClick={() => navigate('/subsidy')}
             />
           </div>
         </div>
@@ -1414,37 +2258,40 @@ export default function Home() {
       <FeaturesGrid />
 
       {/* Featured Products Section */}
-      <section className="py-16 bg-white">
+      <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="flex flex-wrap items-center justify-between mb-12">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
+            <AnimatedSection direction="left">
               <h2 className="text-4xl font-bold text-gray-800 mb-2" style={{ fontFamily: fontFamily.heading }}>Featured Products</h2>
               <p className="text-gray-600" style={{ fontFamily: fontFamily.body }}>Hand-picked products for your farm</p>
-            </motion.div>
+            </AnimatedSection>
             
-            <div className="flex items-center gap-4 mt-4 md:mt-0">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-[#2E7D32] outline-none"
-                style={{ fontFamily: fontFamily.body }}
-              >
-                <option value="all">All Categories</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              
-              <Link to="/products">
-                <button className="text-[#2E7D32] font-semibold hover:underline flex items-center gap-1" style={{ fontFamily: fontFamily.body }}>
-                  View All <IoArrowForward />
-                </button>
-              </Link>
-            </div>
+            <AnimatedSection direction="right">
+              <div className="flex items-center gap-4 mt-4 md:mt-0">
+                <motion.select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-green-600 outline-none"
+                  style={{ fontFamily: fontFamily.body }}
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <option value="all">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </motion.select>
+                
+                <Link to="/products">
+                  <motion.button 
+                    className="text-green-600 font-semibold hover:underline flex items-center gap-1" 
+                    style={{ fontFamily: fontFamily.body }}
+                    whileHover={{ x: 5 }}
+                  >
+                    View All <IoArrowForward />
+                  </motion.button>
+                </Link>
+              </div>
+            </AnimatedSection>
           </div>
 
           {loading ? (
@@ -1456,12 +2303,19 @@ export default function Home() {
               variants={staggerContainer}
               initial="hidden"
               whileInView="visible"
+              viewport={{ once: true }}
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
-              {filteredProducts.length > 0 ? filteredProducts.map(product => (
-                <motion.div key={product.id} variants={fadeInUp}>
-                  <ProductCard product={product} />
-                </motion.div>
+              {filteredProducts.length > 0 ? filteredProducts.slice(0, 6).map((product, index) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  index={index}
+                  onAddToCart={handleAddToCart}
+                  onToggleWishlist={handleToggleWishlist}
+                  onShare={handleShareProduct}
+                  onQuickView={handleQuickView}
+                />
               )) : (
                 <p className="text-center text-gray-500 col-span-3">No products found</p>
               )}
@@ -1471,19 +2325,16 @@ export default function Home() {
       </section>
 
       {/* Solar Solutions Section */}
-      <section className="py-16 bg-gradient-to-r from-yellow-50 to-orange-50">
+      <section className="py-20 bg-gradient-to-r from-yellow-50 to-orange-50">
         <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>Solar Solutions</h2>
-            <p className="text-gray-600 text-lg max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
-              Power your farm with clean energy. Save up to 80% on electricity bills.
-            </p>
-          </motion.div>
+          <AnimatedSection direction="up">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>Solar Solutions</h2>
+              <p className="text-gray-600 text-lg max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
+                Power your farm with clean energy. Save up to 80% on electricity bills.
+              </p>
+            </div>
+          </AnimatedSection>
 
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             <ServiceCard
@@ -1495,7 +2346,8 @@ export default function Home() {
                 'Sell excess power',
                 '5-100 kW systems'
               ]}
-              link="/solar-services/on-grid"
+              link="/solar-services"
+              index={0}
             />
             <ServiceCard
               icon={IoFlash}
@@ -1506,7 +2358,8 @@ export default function Home() {
                 'Battery storage',
                 '24/7 power supply'
               ]}
-              link="/solar-services/off-grid"
+              link="/solar-services"
+              index={1}
             />
             <ServiceCard
               icon={IoWater}
@@ -1517,25 +2370,42 @@ export default function Home() {
                 '90% subsidy available',
                 'Free maintenance'
               ]}
-              link="/solar-services/pumps"
+              link="/solar-services"
+              index={2}
             />
           </div>
 
-          <div className="bg-[#FBC02D] bg-opacity-10 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4">
+          <motion.div 
+            className="bg-yellow-100 bg-opacity-50 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4"
+            whileHover={{ y: -5 }}
+          >
             <div className="flex flex-wrap gap-4">
-              <span className="flex items-center gap-2 text-[#FBC02D] font-semibold" style={{ fontFamily: fontFamily.body }}>
+              <motion.span 
+                className="flex items-center gap-2 text-yellow-600 font-semibold" 
+                style={{ fontFamily: fontFamily.body }}
+                whileHover={{ scale: 1.05 }}
+              >
                 <IoCalculator /> EMI Available
-              </span>
-              <span className="flex items-center gap-2 text-[#FBC02D] font-semibold" style={{ fontFamily: fontFamily.body }}>
+              </motion.span>
+              <motion.span 
+                className="flex items-center gap-2 text-yellow-600 font-semibold" 
+                style={{ fontFamily: fontFamily.body }}
+                whileHover={{ scale: 1.05 }}
+              >
                 <IoGift /> Govt Subsidy Up to 90%
-              </span>
+              </motion.span>
             </div>
-            <Link to="/solar-services/consultation">
-              <button className="bg-[#FBC02D] text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-yellow-500 transition" style={{ fontFamily: fontFamily.heading }}>
+            <Link to="/solar-services">
+              <motion.button 
+                className="bg-yellow-500 text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-yellow-600 transition" 
+                style={{ fontFamily: fontFamily.heading }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
                 Get Free Consultation
-              </button>
+              </motion.button>
             </Link>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -1543,14 +2413,10 @@ export default function Home() {
       <SolarSubsidyGuide />
 
       {/* Government Subsidy Section */}
-      <section className="py-16">
+      <section className="py-20">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
+            <AnimatedSection direction="left">
               <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>
                 Government Subsidy Support
               </h2>
@@ -1565,65 +2431,89 @@ export default function Home() {
                   { step: 2, title: 'Submit Documents', desc: 'We help with all paperwork' },
                   { step: 3, title: 'Installation & Approval', desc: 'Quick installation and subsidy approval' }
                 ].map((item) => (
-                  <div key={item.step} className="flex gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#2E7D32] text-white font-bold flex items-center justify-center flex-shrink-0">
+                  <motion.div 
+                    key={item.step} 
+                    className="flex gap-4"
+                    whileHover={{ x: 5 }}
+                  >
+                    <motion.div 
+                      className="w-10 h-10 rounded-full bg-green-600 text-white font-bold flex items-center justify-center flex-shrink-0"
+                      whileHover={{ scale: 1.1, rotate: 360 }}
+                      transition={{ duration: 0.6 }}
+                    >
                       {item.step}
-                    </div>
+                    </motion.div>
                     <div>
                       <h4 className="font-semibold text-gray-800" style={{ fontFamily: fontFamily.heading }}>{item.title}</h4>
                       <p className="text-sm text-gray-600" style={{ fontFamily: fontFamily.body }}>{item.desc}</p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
 
               <Link to="/subsidy">
-                <button className="bg-[#2E7D32] text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition" style={{ fontFamily: fontFamily.heading }}>
+                <motion.button 
+                  className="bg-gradient-to-r from-green-600 to-green-500 text-white px-8 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-green-600 transition shadow-lg" 
+                  style={{ fontFamily: fontFamily.heading }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
                   Check Eligibility
-                </button>
+                </motion.button>
               </Link>
-            </motion.div>
+            </AnimatedSection>
 
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="bg-gradient-to-br from-green-50 to-blue-50 p-8 rounded-2xl"
-            >
-              <div className="text-center mb-6">
-                <IoCash className="text-5xl text-[#2E7D32] mx-auto mb-2" />
-                <h3 className="text-2xl font-bold text-gray-800 mt-2" style={{ fontFamily: fontFamily.heading }}>Subsidy Calculator</h3>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: fontFamily.body }}>System Cost (₹)</label>
-                  <input
-                    type="range"
-                    min="100000"
-                    max="1000000"
-                    step="50000"
-                    defaultValue="500000"
-                    className="w-full accent-[#2E7D32]"
-                  />
+            <AnimatedSection direction="right">
+              <motion.div 
+                className="bg-gradient-to-br from-green-50 to-blue-50 p-8 rounded-2xl shadow-xl"
+                whileHover={{ y: -5 }}
+              >
+                <div className="text-center mb-6">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                  >
+                    <IoCash className="text-5xl text-green-600 mx-auto mb-2" />
+                  </motion.div>
+                  <h3 className="text-2xl font-bold text-gray-800 mt-2" style={{ fontFamily: fontFamily.heading }}>Subsidy Calculator</h3>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white p-3 rounded-lg">
-                    <p className="text-sm text-gray-500" style={{ fontFamily: fontFamily.body }}>Subsidy Amount</p>
-                    <p className="text-xl font-bold text-[#2E7D32]" style={{ fontFamily: fontFamily.heading }}>₹4,50,000</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2" style={{ fontFamily: fontFamily.body }}>System Cost (₹)</label>
+                    <input
+                      type="range"
+                      min="100000"
+                      max="1000000"
+                      step="50000"
+                      defaultValue="500000"
+                      className="w-full accent-green-600"
+                    />
                   </div>
-                  <div className="bg-white p-3 rounded-lg">
-                    <p className="text-sm text-gray-500" style={{ fontFamily: fontFamily.body }}>Your Cost</p>
-                    <p className="text-xl font-bold text-[#FBC02D]" style={{ fontFamily: fontFamily.heading }}>₹50,000</p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <motion.div 
+                      className="bg-white p-3 rounded-lg"
+                      whileHover={{ scale: 1.05 }}
+                    >
+                      <p className="text-sm text-gray-500" style={{ fontFamily: fontFamily.body }}>Subsidy Amount</p>
+                      <p className="text-xl font-bold text-green-600" style={{ fontFamily: fontFamily.heading }}>₹4,50,000</p>
+                    </motion.div>
+                    <motion.div 
+                      className="bg-white p-3 rounded-lg"
+                      whileHover={{ scale: 1.05 }}
+                    >
+                      <p className="text-sm text-gray-500" style={{ fontFamily: fontFamily.body }}>Your Cost</p>
+                      <p className="text-xl font-bold text-yellow-500" style={{ fontFamily: fontFamily.heading }}>₹50,000</p>
+                    </motion.div>
                   </div>
+                  
+                  <p className="text-sm text-gray-600 text-center" style={{ fontFamily: fontFamily.body }}>
+                    *Based on 90% subsidy for 5HP pump
+                  </p>
                 </div>
-                
-                <p className="text-sm text-gray-600 text-center" style={{ fontFamily: fontFamily.body }}>
-                  *Based on 90% subsidy for 5HP pump
-                </p>
-              </div>
-            </motion.div>
+              </motion.div>
+            </AnimatedSection>
           </div>
         </div>
       </section>
@@ -1635,27 +2525,34 @@ export default function Home() {
       <SuccessStories />
 
       {/* Testimonial Slider */}
-      <section className="py-16 bg-gradient-to-r from-green-50 to-blue-50">
+      <section className="py-20 bg-gradient-to-r from-green-50 to-blue-50">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">What Farmers Say About Us</h2>
+          <AnimatedSection direction="up">
+            <h2 className="text-4xl font-bold text-center text-gray-800 mb-4">What Farmers Say About Us</h2>
+            <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+              Real experiences from our valued farmers
+            </p>
+          </AnimatedSection>
           <TestimonialSlider testimonials={testimonials} />
         </div>
       </section>
 
       {/* Why Choose Us Section */}
-      <section className="py-16 bg-[#2E7D32] text-white">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-4xl font-bold mb-4" style={{ fontFamily: fontFamily.heading }}>Why Choose AgroMart?</h2>
-            <p className="text-xl opacity-90 max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
-              We're committed to your farming success
-            </p>
-          </motion.div>
+      <section className="py-20 bg-gradient-to-r from-green-700 to-green-600 text-white relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full transform -translate-x-32 -translate-y-32"></div>
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full transform translate-x-48 translate-y-48"></div>
+        </div>
+
+        <div className="container mx-auto px-4 relative z-10">
+          <AnimatedSection direction="up">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-bold mb-4" style={{ fontFamily: fontFamily.heading }}>Why Choose AgroMart?</h2>
+              <p className="text-xl opacity-90 max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
+                We're committed to your farming success
+              </p>
+            </div>
+          </AnimatedSection>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
@@ -1666,12 +2563,19 @@ export default function Home() {
             ].map((item, i) => (
               <motion.div
                 key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
                 whileHover={{ scale: 1.05 }}
                 className="text-center"
               >
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <motion.div 
+                  className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3"
+                  whileHover={{ rotate: 360 }}
+                  transition={{ duration: 0.6 }}
+                >
                   <item.icon className="text-3xl" />
-                </div>
+                </motion.div>
                 <h3 className="font-bold text-lg mb-1" style={{ fontFamily: fontFamily.heading }}>{item.title}</h3>
                 <p className="text-sm opacity-80" style={{ fontFamily: fontFamily.body }}>{item.desc}</p>
               </motion.div>
@@ -1681,28 +2585,37 @@ export default function Home() {
       </section>
 
       {/* Blog Section */}
-      <section className="py-16 bg-white">
+      <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
-            <div>
+            <AnimatedSection direction="left">
               <h2 className="text-4xl font-bold text-gray-800 mb-2">Latest from Blog</h2>
               <p className="text-gray-600">Farming tips, news, and updates</p>
-            </div>
-            <Link to="/blog" className="text-[#2E7D32] font-semibold flex items-center gap-1">
-              View All Posts <IoArrowForward />
-            </Link>
+            </AnimatedSection>
+            <AnimatedSection direction="right">
+              <Link to="/blog" className="text-green-600 font-semibold flex items-center gap-1">
+                View All Posts <IoArrowForward />
+              </Link>
+            </AnimatedSection>
           </div>
 
-          <motion.div 
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            className="grid md:grid-cols-3 gap-8"
-          >
-            {blogPosts.slice(0, 3).map((post, index) => (
-              <BlogCard key={post.id} post={post} index={index} />
-            ))}
-          </motion.div>
+          {loading ? (
+            <div className="grid md:grid-cols-3 gap-8">
+              <SkeletonLoader count={3} type="blog" />
+            </div>
+          ) : (
+            <motion.div 
+              variants={staggerContainer}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              className="grid md:grid-cols-3 gap-8"
+            >
+              {blogPosts.slice(0, 3).map((post, index) => (
+                <BlogCard key={post.id} post={post} index={index} />
+              ))}
+            </motion.div>
+          )}
         </div>
       </section>
 
@@ -1716,30 +2629,41 @@ export default function Home() {
       <NewsletterSection />
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-[#2E7D32] to-[#81C784] text-white text-center">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
+      <section className="py-20 bg-gradient-to-r from-green-700 via-green-600 to-yellow-500 text-white text-center relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full transform -translate-x-32 -translate-y-32"></div>
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full transform translate-x-48 translate-y-48"></div>
+        </div>
+
+        <div className="container mx-auto px-4 relative z-10">
+          <AnimatedSection direction="up">
             <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: fontFamily.heading }}>Ready to Transform Your Farm?</h2>
             <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
               Join thousands of farmers using AgroMart for better yields and sustainable farming.
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               <Link to="/register">
-                <button className="bg-white text-[#2E7D32] px-8 py-3 rounded-lg font-semibold hover:bg-green-50 shadow-lg text-lg" style={{ fontFamily: fontFamily.heading }}>
+                <motion.button 
+                  className="bg-white text-green-600 px-8 py-4 rounded-lg font-semibold hover:bg-green-50 shadow-xl text-lg" 
+                  style={{ fontFamily: fontFamily.heading }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
                   Get Started Today
-                </button>
+                </motion.button>
               </Link>
               <Link to="/contact">
-                <button className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/10 text-lg" style={{ fontFamily: fontFamily.heading }}>
+                <motion.button 
+                  className="border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white/10 text-lg" 
+                  style={{ fontFamily: fontFamily.heading }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
                   Contact Sales
-                </button>
+                </motion.button>
               </Link>
             </div>
-          </motion.div>
+          </AnimatedSection>
         </div>
       </section>
 
@@ -1747,16 +2671,21 @@ export default function Home() {
       <WhatsAppButton />
 
       {/* Scroll to top button */}
-      {showScrollTop && (
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={scrollToTop}
-          className="fixed bottom-6 left-6 bg-[#2E7D32] text-white p-3 rounded-full shadow-lg hover:bg-green-700 transition-all z-40"
-        >
-          <IoArrowUp className="text-xl" />
-        </motion.button>
-      )}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={scrollToTop}
+            className="fixed bottom-6 left-6 bg-gradient-to-r from-green-600 to-green-500 text-white p-4 rounded-full shadow-lg hover:from-green-700 hover:to-green-600 transition-all z-40"
+          >
+            <IoArrowUp className="text-xl" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

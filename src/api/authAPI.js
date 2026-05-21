@@ -6,6 +6,9 @@ export const login = async (email, password) => {
     const response = await API.post('/auth/login', { email, password })
     if (response.data.token) {
       localStorage.setItem('token', response.data.token)
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+      }
       if (response.data.refreshToken) {
         localStorage.setItem('refreshToken', response.data.refreshToken)
       }
@@ -22,6 +25,9 @@ export const register = async (userData) => {
     const response = await API.post('/auth/register', userData)
     if (response.data.token) {
       localStorage.setItem('token', response.data.token)
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+      }
       if (response.data.refreshToken) {
         localStorage.setItem('refreshToken', response.data.refreshToken)
       }
@@ -37,10 +43,12 @@ export const logout = async () => {
   try {
     const response = await API.post('/auth/logout')
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
     localStorage.removeItem('refreshToken')
     return response.data
   } catch (error) {
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
     localStorage.removeItem('refreshToken')
     throw error
   }
@@ -60,6 +68,19 @@ export const getProfile = async () => {
 export const updateProfile = async (profileData) => {
   try {
     const response = await API.patch('/auth/profile', profileData)
+    if (response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user))
+    }
+    return response.data
+  } catch (error) {
+    throw error
+  }
+}
+
+// Change password
+export const changePassword = async (currentPassword, newPassword) => {
+  try {
+    const response = await API.put('/auth/change-password', { currentPassword, newPassword })
     return response.data
   } catch (error) {
     throw error

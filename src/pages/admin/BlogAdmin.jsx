@@ -14,6 +14,15 @@ import {
   deleteBlogPost
 } from '../../api/blogAPI';
 
+const BLOG_CATEGORIES = [
+  'Farming Tips',
+  'Subsidy',
+  'Technology',
+  'Solar',
+  'Organic',
+  'Success Stories'
+];
+
 export default function BlogAdmin() {
   const { user } = useAuth();
   const [posts, setPosts] = useState([]);
@@ -278,12 +287,9 @@ export default function BlogAdmin() {
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
                       <option value="">Select Category</option>
-                      <option value="Farming Tips">Farming Tips</option>
-                      <option value="Subsidy">Subsidy</option>
-                      <option value="Technology">Technology</option>
-                      <option value="Solar">Solar</option>
-                      <option value="Organic">Organic</option>
-                      <option value="Success Stories">Success Stories</option>
+                      {BLOG_CATEGORIES.map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

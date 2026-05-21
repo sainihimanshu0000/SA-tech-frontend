@@ -52,7 +52,8 @@ export default function LoanAdmin() {
       const response = await getAllLoanApplications(
         filters.status, 
         filters.page, 
-        filters.limit
+        filters.limit,
+        filters.search
       );
       
       // Handle both response structures
@@ -61,8 +62,8 @@ export default function LoanAdmin() {
       
       setPagination({
         total: response.pagination?.total || response.total || 0,
-        pages: response.pagination?.pages || response.pages || 1,
-        page: response.pagination?.page || response.page || 1
+        pages: response.pagination?.pages || response.pagination?.totalPages || response.pages || 1,
+        page: response.pagination?.page || response.pagination?.currentPage || response.page || 1
       });
     } catch (error) {
       console.error('Error fetching loans:', error);
