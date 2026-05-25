@@ -9,6 +9,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import API from '../api/axios'
+import NotificationBell from './NotificationBell'
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -177,6 +178,7 @@ export default function Navbar() {
 
           {/* Right Menu */}
           <div className="flex items-center gap-2">
+            <NotificationBell />
             {/* Mobile Search Toggle */}
             <button
               onClick={() => setSearchOpen(!searchOpen)}

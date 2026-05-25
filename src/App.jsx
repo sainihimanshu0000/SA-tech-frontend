@@ -29,6 +29,11 @@ const Contact = lazy(() => import('./pages/Contact'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const EcoPowerApp = lazy(() => import('./pages/EcoPowerApp'))
 const Profile = lazy(() => import('./pages/Profile'))
+const VendorDashboard = lazy(() => import('./pages/VendorDashboard'))
+const VendorProducts = lazy(() => import('./pages/VendorProducts'))
+const IoTDashboard = lazy(() => import('./pages/IoTDashboard'))
+const BulkSimulator = lazy(() => import('./pages/BulkSimulator'))
+const Subscriptions = lazy(() => import('./pages/Subscriptions'))
 
 // Loading component
 const LoadingSpinner = ({ message = 'Loading...' }) => (
@@ -100,6 +105,11 @@ function AppContent() {
                 </ProtectedRoute>
               } 
             />
+            <Route path="/vendor/dashboard" element={<ProtectedRoute><VendorDashboard /></ProtectedRoute>} />
+            <Route path="/vendor/products" element={<ProtectedRoute><VendorProducts /></ProtectedRoute>} />
+            <Route path="/iot" element={<IoTDashboard />} />
+            <Route path="/bulk-simulator" element={<BulkSimulator />} />
+            <Route path="/subscriptions" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
             <Route
               path="/profile"
               element={
