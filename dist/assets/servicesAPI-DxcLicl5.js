@@ -1,1 +1,0 @@
-import{A as s}from"./index-DrYCjRYP.js";const o=async t=>{try{return(await s.post("/services",t)).data}catch(r){throw r}},n=async(t,r)=>{try{return(await s.put(`/services/${t}`,{status:r})).data}catch(e){throw e}},i=async(t=1,r=10,e="")=>{try{return(await s.get("/services",{params:{page:t,limit:r,status:e}})).data}catch(a){throw a}};export{o as c,i as g,n as u};

@@ -1,0 +1,1 @@
+import{A as e}from"./index-DVJSkLTs.js";const c=async(t=1,r=12,o={})=>{try{return(await e.get("/products",{params:{page:t,limit:r,...o}})).data}catch(a){throw a}},n=async(t=6)=>{try{const r=await e.get(`/products/featured?limit=${t}`);return r.data.data||r.data}catch(r){throw console.error("Error fetching featured products:",r),r}};export{c as a,n as g};

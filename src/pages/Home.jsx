@@ -2206,47 +2206,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Quick Services Section */}
-      <section className="py-20">
+      {/* All Options Section */}
+      <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <AnimatedSection direction="up">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-800 mb-4" style={{ fontFamily: fontFamily.heading }}>Quick Services</h2>
-              <p className="text-gray-600 text-lg max-w-2xl mx-auto" style={{ fontFamily: fontFamily.body }}>
-                Everything you need for modern farming at your fingertips
+            <div className="text-center mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-3" style={{ fontFamily: fontFamily.heading }}>All Options</h2>
+              <p className="text-gray-600 text-lg max-w-3xl mx-auto" style={{ fontFamily: fontFamily.body }}>
+                Quick links to the main sections — shop, services, solar, subsidies and guides.
               </p>
             </div>
           </AnimatedSection>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <CategoryCard 
-              icon={IoLeaf}
-              title="Buy Seeds"
-              color="#2E7D32"
-              delay={0.1}
-              onClick={() => navigate('/products?category=seeds')}
-            />
-            <CategoryCard 
-              icon={IoFlask}
-              title="Fertilizers & Bio Waste"
-              color="#FBC02D"
-              delay={0.2}
-              onClick={() => navigate('/products?category=fertilizers')}
-            />
-            <CategoryCard 
-              icon={IoSunny}
-              title="Solar Pump Installation"
-              color="#0288D1"
-              delay={0.3}
-              onClick={() => navigate('/solar-services')}
-            />
-            <CategoryCard 
-              icon={IoGift}
-              title="Government Subsidy Help"
-              color="#81C784"
-              delay={0.4}
-              onClick={() => navigate('/subsidy')}
-            />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-6">
+            <CategoryCard icon={IoCart} title="Shop Products" color="#16A34A" delay={0.05} onClick={() => navigate('/products')} />
+            <CategoryCard icon={IoLeaf} title="Seeds" color="#2E7D32" delay={0.1} onClick={() => navigate('/products?category=seeds')} />
+            <CategoryCard icon={IoFlask} title="Fertilizers" color="#F59E0B" delay={0.15} onClick={() => navigate('/products?category=fertilizers')} />
+            <CategoryCard icon={IoSunny} title="Solar" color="#FBBF24" delay={0.2} onClick={() => navigate('/solar-services')} />
+            <CategoryCard icon={IoGift} title="Subsidy Help" color="#10B981" delay={0.25} onClick={() => navigate('/subsidy')} />
+            <CategoryCard icon={IoPeople} title="Services & Install" color="#0284C7" delay={0.3} onClick={() => navigate('/services')} />
+            <CategoryCard icon={IoNewspaper} title="Guides & Blog" color="#8B5CF6" delay={0.35} onClick={() => navigate('/blog')} />
+            <CategoryCard icon={IoCall} title="Support" color="#EF4444" delay={0.4} onClick={() => navigate('/contact')} />
           </div>
         </div>
       </section>

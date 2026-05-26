@@ -1,0 +1,1 @@
+import{j as t}from"./index-DVJSkLTs.js";function a(){return t.jsxs("div",{className:"container mx-auto px-4 py-12",children:[t.jsx("h1",{className:"text-4xl font-bold mb-6",children:"Contact Us"}),t.jsx("p",{className:"text-lg text-gray-600",children:"Get in touch with our team..."})]})}export{a as default};

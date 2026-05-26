@@ -15,7 +15,12 @@ export const updateCartItem = async (cartId, productId, quantity) => {
   return response.data;
 };
 
+export const batchUpdateCart = async (cartId, updates) => {
+  const response = await API.put(`/cart/${cartId}/batch`, { updates });
+  return response.data;
+};
+
 export const removeCartItem = async (cartId, productId) => {
-  const response = await API.delete(`/cart/${cartId}`, { data: { productId } });
+  const response = await API.delete(`/cart/${cartId}/items/${productId}`);
   return response.data;
 };

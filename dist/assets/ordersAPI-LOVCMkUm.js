@@ -1,0 +1,1 @@
+import{A as t}from"./index-DVJSkLTs.js";const o=async e=>{try{return(await t.post("/orders",e)).data}catch(r){throw r}},c=async(e=1,r=10)=>{try{return(await t.get("/orders/my-orders",{params:{page:e,limit:r}})).data}catch(s){throw s}},n=async(e,r="")=>{try{return(await t.patch(`/orders/${e}/cancel`,{reason:r})).data}catch(s){throw s}};export{n as a,o as c,c as g};

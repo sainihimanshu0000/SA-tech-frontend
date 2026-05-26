@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button, Badge } from '../components/UI'
 import API from '../api/axios'
-import { IoStar, IoCart, IoCheckmark } from 'react-icons/io5'
+import { IoStar, IoCart, IoFlash, IoShieldCheckmark, IoReload, IoLeaf } from 'react-icons/io5'
 
 export default function ProductPage(){
   const { id } = useParams()
@@ -11,6 +11,7 @@ export default function ProductPage(){
   const [loading, setLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
+  const [buying, setBuying] = useState(false)
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [reviewAdding, setReviewAdding] = useState(false)
@@ -31,15 +32,35 @@ export default function ProductPage(){
     }
   }
 
-  async function addToCart(){
-    setAdding(true)
+  async function addToCart(redirectToCheckout = false){
+    const selectedQuantity = parseInt(quantity)
+    if (selectedQuantity > product.stock) {
+      alert(`Only ${product.stock} item(s) available`)
+      return
+    }
+
+    if (redirectToCheckout) {
+      setBuying(true)
+    } else {
+      setAdding(true)
+    }
     try {
-      await API.post('/cart', { productId: id, quantity: parseInt(quantity) })
-      alert('Added to cart!')
+      await API.post('/cart', { productId: product._id || id, quantity: selectedQuantity })
+      if (redirectToCheckout) {
+        navigate('/checkout')
+      } else {
+        alert('Added to cart!')
+      }
     } catch (err) {
       console.error(err)
+      if (err.response?.status === 401) {
+        navigate('/login', { state: { from: `/product/${id}` } })
+      } else {
+        alert(err.response?.data?.message || 'Failed to add product to cart')
+      }
     } finally {
       setAdding(false)
+      setBuying(false)
     }
   }
 
@@ -89,7 +110,7 @@ export default function ProductPage(){
               <span className="text-gray-600">({product.reviews?.length || 0} reviews)</span>
             </div>
 
-            <p className="text-gray-600 mb-6">{product.description}</p>
+            <p className="text-gray-600 mb-6 leading-relaxed">{product.description}</p>
 
             {/* Price & Stock */}
             <div className="mb-6">
@@ -115,7 +136,7 @@ export default function ProductPage(){
                   className="w-16 text-center outline-none bg-transparent"
                 />
                 <button 
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => setQuantity(Math.min(product.stock || 1, quantity + 1))}
                   className="px-4 py-2 text-agro-primary hover:bg-agro-background"
                 >
                   +
@@ -123,16 +144,25 @@ export default function ProductPage(){
               </div>
               <Button 
                 size="lg" 
-                onClick={addToCart}
-                disabled={adding || product.stock === 0}
+                onClick={() => addToCart(false)}
+                disabled={adding || buying || product.stock === 0}
                 className="flex-1"
               >
                 <IoCart /> {adding ? 'Adding...' : 'Add to Cart'}
               </Button>
+              <Button
+                size="lg"
+                variant="accent"
+                onClick={() => addToCart(true)}
+                disabled={adding || buying || product.stock === 0}
+                className="flex-1"
+              >
+                <IoFlash /> {buying ? 'Preparing...' : 'Buy Now'}
+              </Button>
             </div>
 
             {/* Details */}
-            <div className="grid grid-cols-2 gap-4 p-4 bg-agro-background rounded-xl">
+            <div className="grid sm:grid-cols-4 gap-4 p-4 bg-agro-background rounded-xl">
               <div>
                 <p className="text-xs text-gray-600 uppercase font-semibold">Category</p>
                 <p className="font-semibold text-agro-dark capitalize">{categoryName || 'Product'}</p>
@@ -141,9 +171,64 @@ export default function ProductPage(){
                 <p className="text-xs text-gray-600 uppercase font-semibold">SKU</p>
                 <p className="font-semibold text-agro-dark">{product._id?.slice(-6)}</p>
               </div>
+              <div>
+                <p className="text-xs text-gray-600 uppercase font-semibold">Delivery</p>
+                <p className="font-semibold text-agro-dark">3-5 days</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 uppercase font-semibold">Payment</p>
+                <p className="font-semibold text-agro-dark">COD Available</p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4 mt-4">
+              <div className="border rounded-xl p-4 flex gap-3">
+                <IoShieldCheckmark className="text-agro-primary text-2xl shrink-0" />
+                <div>
+                  <p className="font-semibold text-agro-dark">Secure Checkout</p>
+                  <p className="text-sm text-gray-600">Protected user order flow</p>
+                </div>
+              </div>
+              <div className="border rounded-xl p-4 flex gap-3">
+                <IoReload className="text-agro-primary text-2xl shrink-0" />
+                <div>
+                  <p className="font-semibold text-agro-dark">Easy Cancellation</p>
+                  <p className="text-sm text-gray-600">Cancel before dispatch</p>
+                </div>
+              </div>
+              <div className="border rounded-xl p-4 flex gap-3">
+                <IoLeaf className="text-agro-primary text-2xl shrink-0" />
+                <div>
+                  <p className="font-semibold text-agro-dark">Farm Ready</p>
+                  <p className="text-sm text-gray-600">Trusted agriculture supplies</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {(product.longDescription || product.specifications) && (
+          <div className="bg-agro-background rounded-xl p-6 mb-12">
+            <h2 className="text-2xl font-bold text-agro-dark mb-4">About This Product</h2>
+            {product.longDescription && (
+              <p className="text-gray-700 leading-relaxed mb-4">{product.longDescription}</p>
+            )}
+            {product.specifications && (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(product.specifications)
+                  .filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value))
+                  .map(([key, value]) => (
+                    <div key={key} className="bg-white rounded-lg p-4">
+                      <p className="text-xs uppercase text-gray-500 font-semibold">{key.replace(/([A-Z])/g, ' $1')}</p>
+                      <p className="text-agro-dark font-medium mt-1">
+                        {Array.isArray(value) ? value.join(', ') : value}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Reviews Section */}
         <div className="grid md:grid-cols-3 gap-8">
