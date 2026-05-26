@@ -1846,12 +1846,12 @@ export default function Home() {
 
   // Marquee items
   const marqueeItems = [
-    { icon: IoLeaf, text: 'Organic Certified Products' },
-    { icon: IoFlash, text: '90% Subsidy Available' },
-    { icon: IoCash, text: 'Best Price Guarantee' },
-    { icon: IoRocket, text: 'Free Delivery on ₹1000+' },
-    { icon: IoShield, text: 'Quality Assured' },
-    { icon: IoTime, text: '24/7 Support' }
+    { icon: IoSunny, text: 'Solar Pumps & Panels' },
+    { icon: IoFlash, text: 'Up to 90% Solar Subsidy' },
+    { icon: IoCash, text: 'Cut Electricity Bills by 80%' },
+    { icon: IoRocket, text: 'Free Site Survey' },
+    { icon: IoShield, text: 'Warranty & Maintenance' },
+    { icon: IoTime, text: 'Fast Installation (3-5 days)' }
   ]
 
   // Testimonials for slider
@@ -2103,7 +2103,7 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
               >
-                Empowering Farmers with Smart Agriculture & Solar Solutions
+                Power Your Farm with Solar — Pumps, Panels & Subsidies
               </motion.h1>
               <motion.p 
                 className="text-xl text-green-50 mb-8 max-w-lg" 
@@ -2112,8 +2112,7 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4, duration: 0.6 }}
               >
-                Quality seeds, fertilizers, solar pumps, and government subsidy support. 
-                Trusted by 10,000+ farmers across India.
+                Solar pumps, high-efficiency panels, and subsidy support — trusted by 10,000+ farmers. Save up to 90% on energy costs.
               </motion.p>
               
               <motion.div 
@@ -2122,16 +2121,6 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6, duration: 0.6 }}
               >
-                <Link to="/products">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-white text-green-600 px-8 py-4 rounded-lg font-semibold hover:bg-green-50 shadow-xl flex items-center gap-2 text-lg"
-                    style={{ fontFamily: fontFamily.heading }}
-                  >
-                    <IoLeaf /> Shop Agriculture Products
-                  </motion.button>
-                </Link>
                 <Link to="/solar-services">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -2140,6 +2129,16 @@ export default function Home() {
                     style={{ fontFamily: fontFamily.heading }}
                   >
                     <IoSunny /> Explore Solar Solutions
+                  </motion.button>
+                </Link>
+                <Link to="/products">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="bg-white text-green-600 px-8 py-4 rounded-lg font-semibold hover:bg-green-50 shadow-xl flex items-center gap-2 text-lg"
+                    style={{ fontFamily: fontFamily.heading }}
+                  >
+                    <IoLeaf /> Shop Agriculture Products
                   </motion.button>
                 </Link>
               </motion.div>
@@ -2219,17 +2218,50 @@ export default function Home() {
           </AnimatedSection>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-6">
-            <CategoryCard icon={IoCart} title="Shop Products" color="#16A34A" delay={0.05} onClick={() => navigate('/products')} />
-            <CategoryCard icon={IoLeaf} title="Seeds" color="#2E7D32" delay={0.1} onClick={() => navigate('/products?category=seeds')} />
-            <CategoryCard icon={IoFlask} title="Fertilizers" color="#F59E0B" delay={0.15} onClick={() => navigate('/products?category=fertilizers')} />
-            <CategoryCard icon={IoSunny} title="Solar" color="#FBBF24" delay={0.2} onClick={() => navigate('/solar-services')} />
-            <CategoryCard icon={IoGift} title="Subsidy Help" color="#10B981" delay={0.25} onClick={() => navigate('/subsidy')} />
-            <CategoryCard icon={IoPeople} title="Services & Install" color="#0284C7" delay={0.3} onClick={() => navigate('/services')} />
-            <CategoryCard icon={IoNewspaper} title="Guides & Blog" color="#8B5CF6" delay={0.35} onClick={() => navigate('/blog')} />
+            <CategoryCard icon={IoSunny} title="Solar Solutions" color="#FBBF24" delay={0.05} onClick={() => navigate('/solar-services')} />
+            <CategoryCard icon={IoWater} title="Solar Pumps" color="#0284C7" delay={0.1} onClick={() => navigate('/solar-services')} />
+            <CategoryCard icon={IoGift} title="Subsidy Help" color="#10B981" delay={0.15} onClick={() => navigate('/subsidy')} />
+            <CategoryCard icon={IoPeople} title="Install & Maintain" color="#2E7D32" delay={0.2} onClick={() => navigate('/services')} />
+            <CategoryCard icon={IoHardwareChip} title="IoT Monitoring" color="#8B5CF6" delay={0.25} onClick={() => navigate('/iot')} />
+            <CategoryCard icon={IoCalculator} title="EMI Calculator" color="#F59E0B" delay={0.3} onClick={() => navigate('/emi-calculator')} />
+            <CategoryCard icon={IoNewspaper} title="Guides & Blog" color="#6D28D9" delay={0.35} onClick={() => navigate('/blog')} />
             <CategoryCard icon={IoCall} title="Support" color="#EF4444" delay={0.4} onClick={() => navigate('/contact')} />
           </div>
         </div>
       </section>
+
+      {/* Solar Highlight Section */}
+      <section className="py-12 bg-gradient-to-r from-yellow-50 to-yellow-100">
+        <div className="container mx-auto px-4">
+          <AnimatedSection direction="up">
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div>
+                <h2 className="text-3xl font-bold mb-4">Solar Solutions For Your Farm</h2>
+                <p className="text-gray-700 mb-6">Switch to solar pumps and panels with subsidy support, free site survey and professional installation. Save up to 80% on energy costs and reduce your farm's carbon footprint.</p>
+                <div className="flex gap-4">
+                  <Link to="/solar-services">
+                    <motion.button whileHover={{ scale: 1.03 }} className="bg-yellow-500 text-gray-900 px-6 py-3 rounded-lg font-semibold">Explore Solar Solutions</motion.button>
+                  </Link>
+                  <Link to="/subsidy">
+                    <motion.button whileHover={{ scale: 1.03 }} className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold border">Check Subsidy</motion.button>
+                  </Link>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h4 className="font-semibold">Solar Pumps</h4>
+                  <p className="text-sm text-gray-600">High-efficiency pumps with up to 90% subsidy and low maintenance.</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h4 className="font-semibold">Solar Panels</h4>
+                  <p className="text-sm text-gray-600">Monocrystalline panels with long-term warranty and performance guarantee.</p>
+                </div>
+              </div>
+            </div>
+          </AnimatedSection>
+        </div>
+      </section>
+      
 
       {/* Stats Section */}
       <StatsSection />

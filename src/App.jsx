@@ -18,6 +18,7 @@ const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const SolarServices = lazy(() => import('./pages/SolarServices'))
+const Services = lazy(() => import('./pages/Services'))
 const EMICalculator = lazy(() => import('./pages/EMICalculator'))
 const CropAdvisory = lazy(() => import('./pages/CropAdvisory'))
 const WishlistPage = lazy(() => import('./pages/WishlistPage'))
@@ -88,6 +89,7 @@ function AppContent() {
             <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
+            <Route path="/services" element={<Services />} />
             <Route path="/solar-services" element={<SolarServices />} />
             <Route path="/emi-calculator" element={<EMICalculator />} />
             <Route path="/crop-advisory" element={<CropAdvisory />} />

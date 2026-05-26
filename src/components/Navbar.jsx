@@ -4,6 +4,7 @@ import {
   IoPerson, IoLogOut, IoChevronDown, IoSunny,
   IoCalculator, IoLeaf, IoStorefront
 } from 'react-icons/io5'
+import { IoPeople } from 'react-icons/io5'
 import { GiHamburgerMenu } from 'react-icons/gi'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -93,11 +94,13 @@ export default function Navbar() {
 
   const mainNavLinks = [
     { path: '/products', label: 'Shop', icon: <IoStorefront className="text-purple-500" /> },
+    { path: '/services', label: 'Services', icon: <IoPeople className="text-blue-500" /> },
     { path: '/blog', label: 'Blog', icon: <IoLeaf className="text-orange-500" /> },
     { path: '/crop-advisory', label: 'Crop Advisory', icon: <IoLeaf className="text-green-500" /> },
   ]
 
   const servicesLinks = [
+    { path: '/services', label: '🛠️ Services' },
     { path: '/solar-services', label: '☀️ Solar Services' },
     { path: '/emi-calculator', label: '🧮 EMI Calculator' },
   ]
